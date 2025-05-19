@@ -18,6 +18,10 @@ typedef struct ed_state {
 	char *buf;
 	size_t nbuf;
 	char *p_buf;
+
+	char *cmd;
+	size_t ncmd;
+	char *ecmd;
 } ed_state;
 
 ed_state ed_init();
@@ -58,6 +62,44 @@ int main(int argc, char *argv[])
 
     ed_open(&ed);
 
+    if (ed.sflag != 1 && ed.file != NULL) {
+        printf("%ld\n", ed.sb.st_size);
+    }
+
+    ssize_t nread;
+
+    do {
+        ed.cmd = memset(ed.cmd, 0, ed.ncmd);
+
+        if (ed.pflag) {
+            printf("%s", ed.pflag);
+        }
+
+        if ((nread = read(STDIN_FILENO, ed.cmd, ed.ncmd)) == -1) {
+			err(EXIT_FAILURE, "read: cmd");
+		}
+
+		if (nread == 0 || nread == 1) {
+            ed.ecmd = "Invalid address";
+
+			goto print_error;
+		}
+
+		if(nread > 0 && ed.cmd[nread-1] == '\n') {
+			ed.cmd[nread-1] = '\0';
+		}
+
+        if (strcmp(ed.cmd, "q") == 0) {
+			break;
+		}
+
+        ed.ecmd = "Unknown command";
+
+        print_error: {
+            printf("?\n");
+        }
+    } while (1);
+
     if (munmap(ed.buf, ed.nbuf) == -1) {
 		err(EXIT_FAILURE, "munmap: %s", ed.file);
 	}
@@ -72,6 +114,17 @@ ed_state ed_init()
     state.pflag = NULL;
     state.sflag = 0;
     state.file = NULL;
+
+    state.ncmd = sysconf(_SC_PAGESIZE);
+
+    if ((state.cmd = (char *)mmap(NULL,
+                                  state.ncmd,
+                                  PROT_READ | PROT_WRITE,
+                                  MAP_PRIVATE | MAP_ANONYMOUS,
+                                  -1,
+                                  0)) == MAP_FAILED) {
+		err(EXIT_FAILURE, "mmap: cmd");
+	}
 
     return state;
 }
@@ -107,11 +160,11 @@ void ed_open(ed_state *ed)
 	ed->nbuf = ((ed->sb.st_size / sysconf(_SC_PAGESIZE)) + 1) * ED_RESERVED_PAGES_FACTOR * sysconf(_SC_PAGESIZE);
 
 	ed->buf = (char *)mmap(NULL,
-	                        ed->nbuf,
-	                        PROT_READ | PROT_WRITE,
-	                        MAP_ANONYMOUS | MAP_PRIVATE,
-	                        -1,
-	                        0);
+	                       ed->nbuf,
+	                       PROT_READ | PROT_WRITE,
+	                       MAP_ANONYMOUS | MAP_PRIVATE,
+	                       -1,
+	                       0);
 
 	if (ed->buf == MAP_FAILED) {
 		err(EXIT_FAILURE, "mmap: %s", ed->file);
@@ -135,11 +188,11 @@ void ed_open(ed_state *ed)
 	    ed->nbuf = 1 * ED_RESERVED_PAGES_FACTOR * sysconf(_SC_PAGESIZE);
 
 	    ed->buf = (char *)mmap(NULL,
-                                ed->nbuf,
-                                PROT_READ | PROT_WRITE,
-                                MAP_ANONYMOUS | MAP_PRIVATE,
-                                -1,
-                                0);
+                               ed->nbuf,
+                               PROT_READ | PROT_WRITE,
+                               MAP_ANONYMOUS | MAP_PRIVATE,
+                               -1,
+                               0);
 
 	    if (ed->buf == MAP_FAILED) {
 		    err(EXIT_FAILURE, "mmap: %s", "no file");
