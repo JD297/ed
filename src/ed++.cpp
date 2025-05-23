@@ -75,7 +75,7 @@ int main() {
 //			std::cout << "No match found (end)." << std::endl;
 		}
 
-		std::regex command_pattern("^[q]|[p]|[n]|[d]|[P]|[w]");
+		std::regex command_pattern("^[q]|[p]|[n]|[d]|[P]|[w]|[a]");
 		std::smatch command_match;
 
 		std::string cmd_com = cmd_end.substr(address_end_match.length());
@@ -194,6 +194,24 @@ int main() {
 				}
 
 				std::cout << outfile.tellp() << "\n";
+			}
+			else if (match.compare("a") == 0) {
+				addr_iter_end = addr_iter_begin;
+
+				while (1) {
+					std::string line;
+
+					std::getline(std::cin, line);
+
+					if (line.compare(".") == 0)
+					{
+						break;
+					}
+
+					lines.insert(std::next(addr_iter_end), line);
+
+					addr_iter_end = std::next(addr_iter_end);
+				}
 			}
 		}
 
