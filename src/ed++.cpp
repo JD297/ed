@@ -14,10 +14,18 @@ int main() {
 	{
 		std::ifstream file(filename);
 
+		size_t nread = 0;
+
 		for (std::string line; std::getline(file, line);) {
 			lines.push_back(line);
+
+			nread += line.length() + 1;
 		}
+
+		std::cout << nread << "\n";
 	}
+
+	filename = "src/ed++.cpp.2";
 
 	bool printPrompt = false;
 	std::string promt = "*";
@@ -67,7 +75,7 @@ int main() {
 //			std::cout << "No match found (end)." << std::endl;
 		}
 
-		std::regex command_pattern("^[q]|[p]|[n]|[d]|[P]");
+		std::regex command_pattern("^[q]|[p]|[n]|[d]|[P]|[w]");
 		std::smatch command_match;
 
 		std::string cmd_com = cmd_end.substr(address_end_match.length());
@@ -177,6 +185,15 @@ int main() {
 			}
 			else if (match.compare("P") == 0) {
 				printPrompt = !printPrompt;
+			}
+			else if (match.compare("w") == 0) {
+				std::ofstream outfile(filename);
+
+				for (auto it = lines.begin(); it != lines.end(); it++) {
+					outfile << *it << "\n";
+				}
+
+				std::cout << outfile.tellp() << "\n";
 			}
 		}
 
