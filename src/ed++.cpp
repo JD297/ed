@@ -19,7 +19,7 @@ int main() {
 		}
 	}
 
-	bool printPrompt = true;
+	bool printPrompt = false;
 	std::string promt = "*";
 
 	std::list<std::string>::iterator addr_iter_current = std::prev(lines.end());
@@ -67,7 +67,7 @@ int main() {
 //			std::cout << "No match found (end)." << std::endl;
 		}
 
-		std::regex command_pattern("^[q]|[p]|[n]|[d]");
+		std::regex command_pattern("^[q]|[p]|[n]|[d]|[P]");
 		std::smatch command_match;
 
 		std::string cmd_com = cmd_end.substr(address_end_match.length());
@@ -174,6 +174,9 @@ int main() {
 				}
 
 				addr_iter_end = addr_iter_temp;
+			}
+			else if (match.compare("P") == 0) {
+				printPrompt = !printPrompt;
 			}
 		}
 
