@@ -75,7 +75,7 @@ int main() {
 //			std::cout << "No match found (end)." << std::endl;
 		}
 
-		std::regex command_pattern("^[q]|[p]|[n]|[d]|[P]|[w]|[a]");
+		std::regex command_pattern("^[q]|[p]|[n]|[d]|[P]|[w]|[a]|[s]");
 		std::smatch command_match;
 
 		std::string cmd_com = cmd_end.substr(address_end_match.length());
@@ -213,7 +213,29 @@ int main() {
 					addr_iter_end = std::next(addr_iter_end);
 				}
 			}
+			else if (match.compare("s") == 0) {
+				std::string parameters = cmd_com.substr(command_match.length());
+
+				std::regex pattern("^/([^/]+)/([^/]+)/");
+				std::smatch matches;
+
+				std::regex_search(parameters, matches, pattern);
+
+				if (matches.size() >= 2) {
+					std::string rsp = matches[1];
+					std::string rpl = matches[2];
+					std::regex regex_search_pattern(rsp);
+
+					for (auto it = addr_iter_begin; it != std::next(addr_iter_end); it++) {
+						*it = std::regex_replace(*it, regex_search_pattern, rpl);
+					}
+				}
+				else {
+					std::cout << "TODO: regex error not matching!\n";
+				}
+			}
 		}
+
 
 		addr_iter_current = addr_iter_end;
 	}
