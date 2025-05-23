@@ -7,11 +7,14 @@
 #include <cctype>
 
 int main() {
-	std::ifstream file("src/ed++.cpp");
 	std::list<std::string> lines;
 
-	for (std::string line; std::getline(file, line);) {
-		lines.push_back(line);
+	{
+		std::ifstream file("src/ed++.cpp");
+
+		for (std::string line; std::getline(file, line);) {
+			lines.push_back(line);
+		}
 	}
 
 	std::list<std::string>::iterator addr_iter_current = std::prev(lines.end());
