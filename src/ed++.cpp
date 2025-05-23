@@ -150,6 +150,15 @@ int main() {
 					line++;
 				}
 			}
+			else if (match.compare("d") == 0) {
+				auto addr_iter_temp = std::next(addr_iter_end);
+
+				for (auto it = addr_iter_begin; it != std::next(addr_iter_end); it++) {
+					lines.erase(it);
+				}
+
+				addr_iter_end = addr_iter_temp;
+			}
 		}
 
 		addr_iter_current = addr_iter_end;
