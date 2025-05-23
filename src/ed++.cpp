@@ -9,20 +9,27 @@
 int main() {
 	std::list<std::string> lines;
 
+	std::string filename = "src/ed++.cpp";
+
 	{
-		std::ifstream file("src/ed++.cpp");
+		std::ifstream file(filename);
 
 		for (std::string line; std::getline(file, line);) {
 			lines.push_back(line);
 		}
 	}
 
+	bool printPrompt = true;
+	std::string promt = "*";
+
 	std::list<std::string>::iterator addr_iter_current = std::prev(lines.end());
 
 	while (1) {
 		std::string cmd;
 
-		std::cout << "*";
+		if (printPrompt) {
+			std::cout << promt;
+		}
 
 		std::getline(std::cin, cmd);
 
