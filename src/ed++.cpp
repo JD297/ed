@@ -75,7 +75,7 @@ int main() {
 //			std::cout << "No match found (end)." << std::endl;
 		}
 
-		std::regex command_pattern("^[q]|[p]|[n]|[d]|[P]|[w]|[a]|[s]");
+		std::regex command_pattern("^[q]|[p]|[n]|[d]|[P]|[w]|[a]|[s]|[g]");
 		std::smatch command_match;
 
 		std::string cmd_com = cmd_end.substr(address_end_match.length());
@@ -228,6 +228,47 @@ int main() {
 
 					for (auto it = addr_iter_begin; it != std::next(addr_iter_end); it++) {
 						*it = std::regex_replace(*it, regex_search_pattern, rpl);
+					}
+				}
+				else {
+					std::cout << "TODO: regex error not matching!\n";
+				}
+			}
+			else if (match.compare("g") == 0) {
+				std::string parameters = cmd_com.substr(command_match.length());
+
+				std::regex pattern("^/([^/]+)/[np]");
+				std::smatch matches;
+
+				std::regex_search(parameters, matches, pattern);
+
+				if (matches.size() >= 2) {
+					std::string sp = matches[1];
+					std::string gc = matches[2];
+					std::regex regex_search_pattern(sp);
+					std::smatch match;
+
+					for (auto it = addr_iter_begin; it != std::next(addr_iter_end); it++) {
+						// TODO eval command: gc string to run the correct comamnd and not
+						// just print like function
+						if (std::regex_search(*it, match, regex_search_pattern)) {
+							std::string cs = std::string(*it);
+
+							size_t pos = 0;
+
+							for (size_t i = 0; i < match.size(); i++) {
+								size_t npos = cs.substr(pos).find(match[i].str());
+
+								if (npos != std::string::npos) {
+									std::cout << cs.substr(pos, npos) <<
+											"\033[31m" <<
+									cs.substr(pos + npos, match[i].str().length()) <<
+											"\033[0m";
+									pos += npos + match[i].str().length();
+								}
+							}
+							std::cout << cs.substr(pos) << "\n";
+						}
 					}
 				}
 				else {
