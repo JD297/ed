@@ -6,31 +6,34 @@
 #include <algorithm>
 #include <cctype>
 
+std::list<std::string>::iterator command_edit(std::list<std::string> *buffer, std::string filename)
+{
+	buffer->clear();
+
+	std::ifstream file(filename);
+
+	size_t nread = 0;
+
+	for (std::string line; std::getline(file, line);) {
+		buffer->push_back(line);
+
+		nread += line.length() + 1;
+	}
+
+	std::cout << nread << "\n";
+
+	return std::prev(buffer->end());
+}
+
 int main() {
 	std::list<std::string> lines;
 
 	std::string filename = "src/ed++.cpp";
 
-	{
-		std::ifstream file(filename);
-
-		size_t nread = 0;
-
-		for (std::string line; std::getline(file, line);) {
-			lines.push_back(line);
-
-			nread += line.length() + 1;
-		}
-
-		std::cout << nread << "\n";
-	}
-
-	filename = "src/ed++.cpp.2";
-
 	bool printPrompt = false;
 	std::string promt = "*";
 
-	std::list<std::string>::iterator addr_iter_current = std::prev(lines.end());
+	std::list<std::string>::iterator addr_iter_current = command_edit(&lines, filename);
 
 	while (1) {
 		std::string cmd;
@@ -154,6 +157,20 @@ int main() {
 
 			if (match.compare("q") == 0) {
 				return 0;
+			}
+			if (match.compare("e") == 0) {
+				std::string parameters = cmd_com.substr(match.length());
+
+				std::regex pattern("^\\s\\s*(.*)");
+				std::smatch matches;
+
+				std::regex_search(parameters, matches, pattern);
+
+				if (matches.size() > 1) {
+					filename = matches[1];
+				}
+
+				addr_iter_current = command_edit(&lines, filename);
 			}
 			else if (match.compare("f") == 0) {
 				std::string parameters = cmd_com.substr(match.length());
