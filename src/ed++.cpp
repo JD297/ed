@@ -6,40 +6,267 @@
 #include <algorithm>
 #include <cctype>
 
-std::list<std::string>::iterator command_edit(std::list<std::string> *buffer, std::string filename)
-{
-	buffer->clear();
+typedef struct ed_state {
+	std::list<std::string> buffer;
+	std::list<std::string>::iterator addr_iter_current;
+	std::list<std::string>::iterator addr_iter_begin;
+	std::list<std::string>::iterator addr_iter_end;
 
-	std::ifstream file(filename);
+	std::string filename;
+
+	bool runs;
+
+	bool printPrompt;
+	std::string promt;
+
+	std::string parameters;
+} ed_state;
+
+void ed_state_init(ed_state *state)
+{
+	state->promt = "*";
+	state->printPrompt = false;
+	state->filename = "src/ed++.cpp";
+	state->buffer = std::list<std::string>();
+	state->runs = true;
+}
+
+int command_quit(ed_state *state)
+{
+	state->runs = false;
+
+	return 0;
+}
+
+int command_file(ed_state *state)
+{
+	std::regex pattern("^\\s\\s*(.*)");
+	std::smatch matches;
+
+	std::regex_search(state->parameters, matches, pattern);
+
+	if (matches.size() > 1) {
+		state->filename = matches[1];
+	}
+
+	std::cout << state->filename << "\n";
+
+	return 0;
+}
+
+int command_edit(ed_state *state)
+{
+	std::regex pattern("^\\s\\s*(.*)");
+	std::smatch matches;
+
+	std::regex_search(state->parameters, matches, pattern);
+
+	if (matches.size() > 1) {
+		state->filename = matches[1];
+	}
+
+	state->buffer.clear();
+
+	std::ifstream file(state->filename);
 
 	size_t nread = 0;
 
 	for (std::string line; std::getline(file, line);) {
-		buffer->push_back(line);
+		state->buffer.push_back(line);
 
 		nread += line.length() + 1;
 	}
 
 	std::cout << nread << "\n";
 
-	return std::prev(buffer->end());
+	state->addr_iter_current = std::prev(state->buffer.end());
+
+	return 0;
 }
 
-int main() {
-	std::list<std::string> lines;
+int command_print(ed_state *state)
+{
+	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
+		std::cout << *it << "\n";
+	}
 
-	std::string filename = "src/ed++.cpp";
+	return 0;
+}
 
-	bool printPrompt = false;
-	std::string promt = "*";
+int command_number(ed_state *state)
+{
+	int line = std::distance(state->buffer.begin(), state->addr_iter_begin) + 1;
 
-	std::list<std::string>::iterator addr_iter_current = command_edit(&lines, filename);
+	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
+		std::cout << line << "\t" << *it << "\n";
+
+		line++;
+	}
+
+	return 0;
+}
+
+int command_delete(ed_state *state)
+{
+	auto addr_iter_temp = std::next(state->addr_iter_end);
+
+	if (addr_iter_temp == std::prev(state->buffer.end()) || addr_iter_temp == state->buffer.end()) {
+		addr_iter_temp = std::prev(state->addr_iter_begin);
+	}
+
+	auto end = std::next(state->addr_iter_end);
+
+	for (auto it = state->addr_iter_begin; it != end; ) {
+		it = state->buffer.erase(it);
+	}
+
+	state->addr_iter_end = addr_iter_temp;
+
+	return 0;
+}
+
+int command_write(ed_state *state)
+{
+	std::ofstream outfile(state->filename);
+
+	for (auto it = state->buffer.begin(); it != state->buffer.end(); it++) {
+		outfile << *it << "\n";
+	}
+
+	std::cout << outfile.tellp() << "\n";
+
+	return 0;
+}
+
+int command_prompt(ed_state *state)
+{
+	state->printPrompt = !state->printPrompt;
+
+	return 0;
+}
+
+int command_append(ed_state *state)
+{
+	state->addr_iter_end = state->addr_iter_begin;
 
 	while (1) {
+		std::string line;
+
+		std::getline(std::cin, line);
+
+		if (line.compare(".") == 0)
+		{
+			break;
+		}
+
+		state->buffer.insert(std::next(state->addr_iter_end), line);
+
+		state->addr_iter_end = std::next(state->addr_iter_end);
+	}
+
+	return 0;
+}
+
+int command_insert(ed_state *state)
+{
+	state->addr_iter_end = state->addr_iter_begin;
+
+	while (1) {
+		std::string line;
+
+		std::getline(std::cin, line);
+
+		if (line.compare(".") == 0)
+		{
+			break;
+		}
+
+		state->buffer.insert(state->addr_iter_begin, line);
+
+		state->addr_iter_end = std::prev(state->addr_iter_begin);
+	}
+
+	return 0;
+}
+
+int command_substitute(ed_state *state)
+{
+	std::regex pattern("^/([^/]+)/([^/]+)/");
+	std::smatch matches;
+
+	std::regex_search(state->parameters, matches, pattern);
+
+	if (matches.size() < 2) {
+		return -1;
+	}
+
+	std::string rsp = matches[1];
+	std::string rpl = matches[2];
+	std::regex regex_search_pattern(rsp);
+
+	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
+		*it = std::regex_replace(*it, regex_search_pattern, rpl);
+	}
+
+	return 0;
+}
+
+int command_global(ed_state *state)
+{
+	std::regex pattern("^/([^/]+)/[np]");
+	std::smatch matches;
+
+	std::regex_search(state->parameters, matches, pattern);
+
+	if (matches.size() < 2) {
+		return -1;
+	}
+
+	std::string sp = matches[1];
+	std::string gc = matches[2];
+	std::regex regex_search_pattern(sp);
+	std::smatch match;
+
+	auto end = std::next(state->addr_iter_end);
+
+	std::list<std::list<std::string>::iterator> marked_lines;
+
+	for (auto it = state->addr_iter_begin; it != end; it++) {
+		if (!std::regex_search(*it, match,regex_search_pattern)) {
+			continue;
+		}
+
+		marked_lines.push_back(it);
+	}
+
+	for (auto it = marked_lines.begin(); it != marked_lines.end(); it++) {
+		// TODO eval command: gc string to run the correct command and not
+		// just print like function
+		state->addr_iter_begin = *it;
+		state->addr_iter_end = *it;
+
+		if (command_print(state) != 0) {
+			// TODO error
+		}
+	}
+
+	return 0;
+}
+
+int main()
+{
+	ed_state state;
+	ed_state_init(&state);
+
+	if (command_edit(&state) != 0) {
+		// TODO error printing
+	}
+
+	do {
 		std::string cmd;
 
-		if (printPrompt) {
-			std::cout << promt;
+		if (state.printPrompt) {
+			std::cout << state.promt;
 		}
 
 		std::getline(std::cin, cmd);
@@ -93,24 +320,22 @@ int main() {
 //			std::cout << "No match found (command)." << std::endl;
 		}
 
-		std::list<std::string>::iterator addr_iter_begin;
-		std::list<std::string>::iterator addr_iter_end;
 
 		if (address_start_match.length() == 0 && address_end_match.length() == 0) {
 			if (address_seperator_match.length() == 0) {
-				addr_iter_begin = addr_iter_current;
-				addr_iter_end = addr_iter_current;
+				state.addr_iter_begin = state.addr_iter_current;
+				state.addr_iter_end = state.addr_iter_current;
 			}
 			else {
 				std::string match = address_seperator_match.str();
 
 				if (match.compare(",") == 0) {
-					addr_iter_begin = lines.begin();
-					addr_iter_end = std::prev(lines.end());
+					state.addr_iter_begin = state.buffer.begin();
+					state.addr_iter_end = std::prev(state.buffer.end());
 				}
 				else if (match.compare(";") == 0) {
-					addr_iter_begin = addr_iter_current;
-					addr_iter_end = std::prev(lines.end());
+					state.addr_iter_begin = state.addr_iter_current;
+					state.addr_iter_end = std::prev(state.buffer.end());
 				}
 			}
 		}
@@ -119,16 +344,17 @@ int main() {
 			std::string match = address_start_match.str();
 
 			if (match.compare("$") == 0) {
-				addr_iter_begin = std::prev(lines.end());
+				state.addr_iter_begin = std::prev(state.buffer.end());
 			}
 			else if (match.compare(".") == 0) {
-				addr_iter_begin = addr_iter_current;
+				state.addr_iter_begin = state.addr_iter_current;
 			}
 			else if (std::all_of(match.begin(), match.end(), ::isdigit)) {
-				addr_iter_begin = std::next(lines.begin(), std::stoi(match) - 1);
+				state.addr_iter_begin = std::next(state.buffer.begin(), std::stoi(match) - 1);
 			}
 			else {
-				std::cout << "Error interpreting (start): " << match << std::endl;
+				// std::cout << "Error interpreting (start): " << match << std::endl;
+				// TODO error
 			}
 		}
 
@@ -136,202 +362,95 @@ int main() {
 			std::string match = address_end_match.str();
 
 			if (match.compare("$") == 0) {
-				addr_iter_end = std::prev(lines.end());
+				state.addr_iter_end = std::prev(state.buffer.end());
 			}
 			else if (match.compare(".") == 0) {
-				addr_iter_end = addr_iter_current;
+				state.addr_iter_end = state.addr_iter_current;
 			}
 			else if (std::all_of(match.begin(), match.end(), ::isdigit)) {
-				addr_iter_end = std::next(lines.begin(), std::stoi(match) - 1);
+				state.addr_iter_end = std::next(state.buffer.begin(), std::stoi(match) - 1);
 			}
 			else {
-				std::cout << "Error interpreting (end)" << std::endl;
+				//std::cout << "Error interpreting (end)" << std::endl;
+				// TODO error
 			}
 		}
 		else if (address_start_match.length() > 0) {
-			addr_iter_end = addr_iter_begin;
+			state.addr_iter_end = state.addr_iter_begin;
 		}
 
 		if (command_match.length() > 0) {
 			std::string match = command_match[1];
 
+			state.parameters = cmd_com.substr(match.length());
+
 			if (match.compare("q") == 0) {
-				return 0;
-			}
-			if (match.compare("e") == 0) {
-				std::string parameters = cmd_com.substr(match.length());
-
-				std::regex pattern("^\\s\\s*(.*)");
-				std::smatch matches;
-
-				std::regex_search(parameters, matches, pattern);
-
-				if (matches.size() > 1) {
-					filename = matches[1];
+				if (command_quit(&state) != 0) {
+					// TODO error
 				}
-
-				addr_iter_current = command_edit(&lines, filename);
+			}
+			else if (match.compare("e") == 0) {
+				if (command_edit(&state) != 0) {
+					// TODO error
+				}
 			}
 			else if (match.compare("f") == 0) {
-				std::string parameters = cmd_com.substr(match.length());
-
-				std::regex pattern("^\\s\\s*(.*)");
-				std::smatch matches;
-
-				std::regex_search(parameters, matches, pattern);
-
-				if (matches.size() > 1) {
-					filename = matches[1];
+				if (command_file(&state) != 0) {
+					// TODO error
 				}
-
-				std::cout << filename << "\n";
 			}
-			else if (match.compare("p") == 0 || match.compare("n") == 0) {
-				bool line_numbers = match.compare("n") == 0;
-
-				int line = std::distance(lines.begin(), addr_iter_begin) + 1;
-
-				for (auto it = addr_iter_begin; it != std::next(addr_iter_end); it++) {
-					if (line_numbers) {
-						std::cout << line << "\t" << *it << "\n";
-					}
-					else {
-						std::cout << *it << "\n";
-					}
-
-					line++;
+			else if (match.compare("p") == 0) {
+				if (command_print(&state) != 0) {
+					// TODO error
+				}
+			}
+			else if (match.compare("n") == 0) {
+				if (command_number(&state) != 0) {
+					// TODO error
 				}
 			}
 			else if (match.compare("d") == 0) {
-				auto addr_iter_temp = std::next(addr_iter_end);
-
-				if (addr_iter_temp == std::prev(lines.end()) || addr_iter_temp == lines.end()) {
-					addr_iter_temp = std::prev(addr_iter_begin);
+				if (command_delete(&state) != 0) {
+					// TODO error
 				}
-
-				auto end = std::next(addr_iter_end);
-
-				for (auto it = addr_iter_begin; it != end; ) {
-					it = lines.erase(it);
-				}
-
-				addr_iter_end = addr_iter_temp;
 			}
 			else if (match.compare("P") == 0) {
-				printPrompt = !printPrompt;
+				if (command_prompt(&state) != 0) {
+					// TODO error
+				}
 			}
 			else if (match.compare("w") == 0) {
-				std::ofstream outfile(filename);
-
-				for (auto it = lines.begin(); it != lines.end(); it++) {
-					outfile << *it << "\n";
+				if (command_write(&state) != 0) {
+					// TODO error
 				}
-
-				std::cout << outfile.tellp() << "\n";
 			}
 			else if (match.compare("a") == 0) {
-				addr_iter_end = addr_iter_begin;
-
-				while (1) {
-					std::string line;
-
-					std::getline(std::cin, line);
-
-					if (line.compare(".") == 0)
-					{
-						break;
-					}
-
-					lines.insert(std::next(addr_iter_end), line);
-
-					addr_iter_end = std::next(addr_iter_end);
+				if (command_append(&state) != 0) {
+					// TODO error
 				}
 			}
 			else if (match.compare("i") == 0) {
-				addr_iter_end = addr_iter_begin;
-
-				while (1) {
-					std::string line;
-
-					std::getline(std::cin, line);
-
-					if (line.compare(".") == 0)
-					{
-						break;
-					}
-
-					lines.insert(addr_iter_begin, line);
-
-					addr_iter_end = std::prev(addr_iter_begin);
+				if (command_insert(&state) != 0) {
+					// TODO error
 				}
 			}
 			else if (match.compare("s") == 0) {
-				std::string parameters = cmd_com.substr(match.length());
-
-				std::regex pattern("^/([^/]+)/([^/]+)/");
-				std::smatch matches;
-
-				std::regex_search(parameters, matches, pattern);
-
-				if (matches.size() >= 2) {
-					std::string rsp = matches[1];
-					std::string rpl = matches[2];
-					std::regex regex_search_pattern(rsp);
-
-					for (auto it = addr_iter_begin; it != std::next(addr_iter_end); it++) {
-						*it = std::regex_replace(*it, regex_search_pattern, rpl);
-					}
-				}
-				else {
-					std::cout << "TODO: regex error not matching (substitute)!\n";
+				if (command_substitute(&state) != 0) {
+					// TODO error
 				}
 			}
 			else if (match.compare("g") == 0) {
-				std::string parameters = cmd_com.substr(match.length());
-
-				std::regex pattern("^/([^/]+)/[np]");
-				std::smatch matches;
-
-				std::regex_search(parameters, matches, pattern);
-
-				if (matches.size() >= 2) {
-					std::string sp = matches[1];
-					std::string gc = matches[2];
-					std::regex regex_search_pattern(sp);
-					std::smatch match;
-
-					for (auto it = addr_iter_begin; it != std::next(addr_iter_end); it++) {
-						// TODO eval command: gc string to run the correct comamnd and not
-						// just print like function
-						if (std::regex_search(*it, match, regex_search_pattern)) {
-							std::string cs = std::string(*it);
-
-							size_t pos = 0;
-
-							for (size_t i = 0; i < match.size(); i++) {
-								size_t npos = cs.substr(pos).find(match[i].str());
-
-								if (npos != std::string::npos) {
-									std::cout << cs.substr(pos, npos) <<
-											"\033[31m" <<
-									cs.substr(pos + npos, match[i].str().length()) <<
-											"\033[0m";
-									pos += npos + match[i].str().length();
-								}
-							}
-							std::cout << cs.substr(pos) << "\n";
-						}
-					}
+				if (command_global(&state) != 0) {
+					// TODO error
 				}
-				else {
-					std::cout << "TODO: regex error not matching (global)!\n";
-				}
+			} else {
+				// TODO error
 			}
 		}
 
 
-		addr_iter_current = addr_iter_end;
-	}
+		state.addr_iter_current = state.addr_iter_end;
+	} while (state.runs);
 
 	return 0;
 }
