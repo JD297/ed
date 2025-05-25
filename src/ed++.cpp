@@ -41,24 +41,24 @@ int main() {
 
 		std::getline(std::cin, cmd);
 
-		std::regex address_pattern("^([0-9])+|[$]|[.]");
+		std::regex address_pattern("^([0-9]+|[$]|[.])");
 
 		std::smatch address_start_match;
 
 		if (std::regex_search(cmd, address_start_match, address_pattern)) {
-//			std::cout << "Match found: " << address_start_match.str() << std::endl;
+//			std::cout << "Match found (address_start_match): " << address_start_match.str() << std::endl;
 //			std::cout << "Length: " << address_start_match.length() << std::endl;
 		} else {
 //			std::cout << "No match found (start)." << std::endl;
 		}
 
-		std::regex address_seperator_pattern("^[,]|[;]");
+		std::regex address_seperator_pattern("^([,]|[;])");
 		std::smatch address_seperator_match;
 
 		std::string cmd_sep = cmd.substr(address_start_match.length());
 
 		if (std::regex_search(cmd_sep, address_seperator_match, address_seperator_pattern)) {
-//			std::cout << "Match found: " << address_seperator_match.str() << std::endl;
+//			std::cout << "Match found (address_seperator_match): " << address_seperator_match.str() << std::endl;
 //			std::cout << "Length: " << address_seperator_match.length() << std::endl;
 		} else {
 //			std::cout << "No match found (seperator)." << std::endl;
@@ -69,13 +69,13 @@ int main() {
 		std::string cmd_end = cmd_sep.substr(address_seperator_match.length());
 
 		if (std::regex_search(cmd_end, address_end_match, address_pattern)) {
-//			std::cout << "Match found: " << address_end_match.str() << std::endl;
+//			std::cout << "Match found (address_end_match): " << address_end_match.str() << std::endl;
 //			std::cout << "Length: " << address_end_match.length() << std::endl;
 		} else {
 //			std::cout << "No match found (end)." << std::endl;
 		}
 
-		std::regex command_pattern("^[q]|[p]|[n]|[d]|[P]|[w]|[a]|[s]|[g]|[i]");
+		std::regex command_pattern("^([a-zA-Z])(.*+)");
 		std::smatch command_match;
 
 		std::string cmd_com = cmd_end.substr(address_end_match.length());
@@ -83,6 +83,9 @@ int main() {
 		if (std::regex_search(cmd_com, command_match, command_pattern)) {
 //			std::cout << "Match found: " << command_match.str() << std::endl;
 //			std::cout << "Length: " << command_match.length() << std::endl;
+//			for (long int i = 0; i < command_match.length(); i++)
+//				std::cout << "match[" << i << "]:" << command_match[i] << std::endl;
+
 		} else {
 //			std::cout << "No match found (command)." << std::endl;
 		}
@@ -147,10 +150,24 @@ int main() {
 		}
 
 		if (command_match.length() > 0) {
-			std::string match = command_match.str();
+			std::string match = command_match[1];
 
 			if (match.compare("q") == 0) {
 				return 0;
+			}
+			else if (match.compare("f") == 0) {
+				std::string parameters = cmd_com.substr(match.length());
+
+				std::regex pattern("^\\s\\s*(.*)");
+				std::smatch matches;
+
+				std::regex_search(parameters, matches, pattern);
+
+				if (matches.size() > 1) {
+					filename = matches[1];
+				}
+
+				std::cout << filename << "\n";
 			}
 			else if (match.compare("p") == 0 || match.compare("n") == 0) {
 				bool line_numbers = match.compare("n") == 0;
@@ -232,7 +249,7 @@ int main() {
 				}
 			}
 			else if (match.compare("s") == 0) {
-				std::string parameters = cmd_com.substr(command_match.length());
+				std::string parameters = cmd_com.substr(match.length());
 
 				std::regex pattern("^/([^/]+)/([^/]+)/");
 				std::smatch matches;
@@ -249,11 +266,11 @@ int main() {
 					}
 				}
 				else {
-					std::cout << "TODO: regex error not matching!\n";
+					std::cout << "TODO: regex error not matching (substitute)!\n";
 				}
 			}
 			else if (match.compare("g") == 0) {
-				std::string parameters = cmd_com.substr(command_match.length());
+				std::string parameters = cmd_com.substr(match.length());
 
 				std::regex pattern("^/([^/]+)/[np]");
 				std::smatch matches;
@@ -290,7 +307,7 @@ int main() {
 					}
 				}
 				else {
-					std::cout << "TODO: regex error not matching!\n";
+					std::cout << "TODO: regex error not matching (global)!\n";
 				}
 			}
 		}
