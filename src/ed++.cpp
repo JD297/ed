@@ -19,8 +19,13 @@ typedef struct ed_state {
 	bool printPrompt;
 	std::string promt;
 
+	bool printErrors;
+	std::string error;
+
 	std::string parameters;
 } ed_state;
+
+extern int run_command(ed_state *state, std::string command);
 
 void ed_state_init(ed_state *state)
 {
@@ -29,6 +34,15 @@ void ed_state_init(ed_state *state)
 	state->filename = "src/ed++.cpp";
 	state->buffer = std::list<std::string>();
 	state->runs = true;
+}
+
+void ed_error(ed_state *state)
+{
+	std::cout << "?" << std::endl;
+
+	if (state->printErrors) {
+		std::cout << state->error << std::endl;
+	}
 }
 
 int command_quit(ed_state *state)
@@ -213,18 +227,28 @@ int command_substitute(ed_state *state)
 
 int command_global(ed_state *state)
 {
-	std::regex pattern("^/([^/]+)/[np]");
+	std::regex pattern("^/([^/]+)/([a-zA-Z])");
 	std::smatch matches;
 
 	std::regex_search(state->parameters, matches, pattern);
 
-	if (matches.size() < 2) {
+	if (matches.size() < 3) {
+		// TODO set error msg
 		return -1;
 	}
 
-	std::string sp = matches[1];
-	std::string gc = matches[2];
-	std::regex regex_search_pattern(sp);
+	std::string global_command = matches[2];
+
+	std::regex except_commands("[gGvV]");
+	std::smatch except_match;
+
+	if (std::regex_search(global_command,  except_match,  except_commands)) {
+		// TODO set error msg
+		return -1;
+	}
+
+	std::string search_pattern = matches[1];
+	std::regex regex_search_pattern(search_pattern);
 	std::smatch match;
 
 	auto end = std::next(state->addr_iter_end);
@@ -240,17 +264,58 @@ int command_global(ed_state *state)
 	}
 
 	for (auto it = marked_lines.begin(); it != marked_lines.end(); it++) {
-		// TODO eval command: gc string to run the correct command and not
-		// just print like function
 		state->addr_iter_begin = *it;
 		state->addr_iter_end = *it;
 
-		if (command_print(state) != 0) {
-			// TODO error
+		if (run_command(state, global_command) != 0) {
+			ed_error(state);
 		}
 	}
 
 	return 0;
+}
+
+int run_command(ed_state *state, std::string command)
+{
+	if (command.compare("q") == 0) {
+		return command_quit(state);
+	}
+	else if (command.compare("e") == 0) {
+		return command_edit(state);
+	}
+	else if (command.compare("f") == 0) {
+		return command_file(state);
+	}
+	else if (command.compare("p") == 0) {
+		return command_print(state);
+	}
+	else if (command.compare("n") == 0) {
+		return command_number(state);
+	}
+	else if (command.compare("d") == 0) {
+		return command_delete(state);
+	}
+	else if (command.compare("P") == 0) {
+		return command_prompt(state);
+	}
+	else if (command.compare("w") == 0) {
+		return command_write(state);
+	}
+	else if (command.compare("a") == 0) {
+		return command_append(state);
+	}
+	else if (command.compare("i") == 0) {
+		return command_insert(state);
+	}
+	else if (command.compare("s") == 0) {
+		return command_substitute(state);
+	}
+	else if (command.compare("g") == 0) {
+		return command_global(state);
+	} else {
+		// TODO set error msg
+		return -1;
+	}
 }
 
 int main()
@@ -259,7 +324,7 @@ int main()
 	ed_state_init(&state);
 
 	if (command_edit(&state) != 0) {
-		// TODO error printing
+		ed_error(&state);
 	}
 
 	do {
@@ -354,7 +419,8 @@ int main()
 			}
 			else {
 				// std::cout << "Error interpreting (start): " << match << std::endl;
-				// TODO error
+				// TODO set error msg
+				ed_error(&state);
 			}
 		}
 
@@ -372,7 +438,8 @@ int main()
 			}
 			else {
 				//std::cout << "Error interpreting (end)" << std::endl;
-				// TODO error
+				// TODO set error msg
+				ed_error(&state);
 			}
 		}
 		else if (address_start_match.length() > 0) {
@@ -384,67 +451,8 @@ int main()
 
 			state.parameters = cmd_com.substr(match.length());
 
-			if (match.compare("q") == 0) {
-				if (command_quit(&state) != 0) {
-					// TODO error
-				}
-			}
-			else if (match.compare("e") == 0) {
-				if (command_edit(&state) != 0) {
-					// TODO error
-				}
-			}
-			else if (match.compare("f") == 0) {
-				if (command_file(&state) != 0) {
-					// TODO error
-				}
-			}
-			else if (match.compare("p") == 0) {
-				if (command_print(&state) != 0) {
-					// TODO error
-				}
-			}
-			else if (match.compare("n") == 0) {
-				if (command_number(&state) != 0) {
-					// TODO error
-				}
-			}
-			else if (match.compare("d") == 0) {
-				if (command_delete(&state) != 0) {
-					// TODO error
-				}
-			}
-			else if (match.compare("P") == 0) {
-				if (command_prompt(&state) != 0) {
-					// TODO error
-				}
-			}
-			else if (match.compare("w") == 0) {
-				if (command_write(&state) != 0) {
-					// TODO error
-				}
-			}
-			else if (match.compare("a") == 0) {
-				if (command_append(&state) != 0) {
-					// TODO error
-				}
-			}
-			else if (match.compare("i") == 0) {
-				if (command_insert(&state) != 0) {
-					// TODO error
-				}
-			}
-			else if (match.compare("s") == 0) {
-				if (command_substitute(&state) != 0) {
-					// TODO error
-				}
-			}
-			else if (match.compare("g") == 0) {
-				if (command_global(&state) != 0) {
-					// TODO error
-				}
-			} else {
-				// TODO error
+			if (run_command(&state, match) != 0) {
+				ed_error(&state);
 			}
 		}
 
