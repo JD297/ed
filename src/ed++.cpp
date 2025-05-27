@@ -5,6 +5,7 @@
 #include <regex>
 #include <algorithm>
 #include <cctype>
+#include <unistd.h>
 
 typedef struct ed_state {
 	std::list<std::string> buffer;
@@ -328,13 +329,33 @@ int main()
 	}
 
 	do {
-		std::string cmd;
+		std::string cmd = "";
 
 		if (state.printPrompt) {
-			std::cout << state.promt;
+			std::cout << state.promt << std::flush;
 		}
 
-		std::getline(std::cin, cmd);
+		ssize_t nread;
+
+		for (char buf[1]; ; ) {
+			if ((nread = read(STDIN_FILENO, buf, 1)) == -1) {
+				// err(EXIT_FAILURE, "read: cmd");
+			}
+
+			if (nread == 0) {
+				break;
+			}
+
+			if (buf[0] == '\n') {
+				break;
+			}
+
+			cmd.append(buf);
+		}
+
+		if (nread == 0) {
+			break;
+		}
 
 		std::regex address_pattern("^([0-9]+|[$]|[.])");
 
