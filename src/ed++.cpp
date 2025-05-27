@@ -7,6 +7,12 @@
 #include <cctype>
 #include <unistd.h>
 
+typedef enum {
+	UNCHANGED,
+	CHANGED,
+	CHANGED_AND_WARNED
+} ModState;
+
 typedef struct ed_state {
 	std::list<std::string> buffer;
 	std::list<std::string>::iterator addr_iter_current;
@@ -17,15 +23,17 @@ typedef struct ed_state {
 
 	bool runs;
 
-	bool printPrompt;
+	bool prompt_print;
 	std::string promt;
 
 	bool script;
 
-	bool printErrors;
+	bool error_print;
 	std::string error;
 
 	std::string parameters;
+
+	ModState mod_state;
 } ed_state;
 
 extern int run_command(ed_state *state, std::string command);
@@ -33,24 +41,49 @@ extern int run_command(ed_state *state, std::string command);
 void ed_state_init(ed_state *state)
 {
 	state->promt = "*";
-	state->printPrompt = false;
+	state->prompt_print = false;
+	state->error = "";
+	state->error_print = false;
 	state->script = false;
 	state->filename = "src/ed++.cpp";
 	state->buffer = std::list<std::string>();
 	state->runs = true;
+	state->mod_state = UNCHANGED;
 }
 
 void ed_error(ed_state *state)
 {
 	std::cout << "?" << std::endl;
 
-	if (state->printErrors) {
+	if (state->error_print) {
 		std::cout << state->error << std::endl;
 	}
 }
 
+int command_print_error(ed_state *state)
+{
+	std::cout << state->error << std::endl;
+
+	return 0;
+}
+
+int command_toggle_print_error(ed_state *state)
+{
+	state->error_print = !state->error_print;
+
+	return 0;
+}
+
 int command_quit(ed_state *state)
 {
+	if (state->mod_state == CHANGED) {
+		state->mod_state = CHANGED_AND_WARNED;
+
+		state->error = "Warning: buffer modified";
+
+		return -1;
+	}
+
 	state->runs = false;
 
 	return 0;
@@ -74,6 +107,14 @@ int command_file(ed_state *state)
 
 int command_edit(ed_state *state)
 {
+	if (state->mod_state == CHANGED) {
+		state->mod_state = CHANGED_AND_WARNED;
+
+		state->error = "Warning: buffer modified";
+
+		return -1;
+	}
+
 	std::regex pattern("^\\s\\s*(.*)");
 	std::smatch matches;
 
@@ -100,6 +141,8 @@ int command_edit(ed_state *state)
 	}
 
 	state->addr_iter_current = std::prev(state->buffer.end());
+
+	state->mod_state = UNCHANGED;
 
 	return 0;
 }
@@ -142,6 +185,8 @@ int command_delete(ed_state *state)
 
 	state->addr_iter_end = addr_iter_temp;
 
+	state->mod_state = CHANGED;
+
 	return 0;
 }
 
@@ -157,12 +202,14 @@ int command_write(ed_state *state)
 		std::cout << outfile.tellp() << std::endl;
 	}
 
+	state->mod_state = UNCHANGED;
+
 	return 0;
 }
 
 int command_prompt(ed_state *state)
 {
-	state->printPrompt = !state->printPrompt;
+	state->prompt_print = !state->prompt_print;
 
 	return 0;
 }
@@ -186,6 +233,8 @@ int command_append(ed_state *state)
 		state->addr_iter_end = std::next(state->addr_iter_end);
 	}
 
+	state->mod_state = CHANGED;
+
 	return 0;
 }
 
@@ -207,6 +256,8 @@ int command_insert(ed_state *state)
 
 		state->addr_iter_end = std::prev(state->addr_iter_begin);
 	}
+
+	state->mod_state = CHANGED;
 
 	return 0;
 }
@@ -230,28 +281,38 @@ int command_substitute(ed_state *state)
 		*it = std::regex_replace(*it, regex_search_pattern, rpl);
 	}
 
+	state->mod_state = CHANGED;
+
 	return 0;
 }
 
 int command_global(ed_state *state)
 {
-	std::regex pattern("^/([^/]+)/([a-zA-Z])");
+	std::regex pattern("^/([^/]+)/?([a-zA-Z])?");
 	std::smatch matches;
 
 	std::regex_search(state->parameters, matches, pattern);
 
-	if (matches.size() < 3) {
-		// TODO set error msg
-		return -1;
-	}
+	std::string global_command = "p";
 
-	std::string global_command = matches[2];
+	//for (size_t i = 0; i < matches.size(); i++)
+	//	std::cout << "match[" << i << "]: \"" << matches[i] << "\"" << std::endl;
+
+	// TODO if RE  is empty then use last RE
+	// if no pattern then error "No previous pattern"
+
+	if (matches.size() == 0) {
+		state->error = "Invalid pattern delimiter";
+		return -1;
+	} else if (matches.size() == 3 && matches[2] != "") {
+		global_command = matches[2];
+	}
 
 	std::regex except_commands("[gGvV]");
 	std::smatch except_match;
 
-	if (std::regex_search(global_command,  except_match,  except_commands)) {
-		// TODO set error msg
+	if (std::regex_search(global_command, except_match, except_commands)) {
+		state->error = "Cannot nest global commands";
 		return -1;
 	}
 
@@ -276,7 +337,8 @@ int command_global(ed_state *state)
 		state->addr_iter_end = *it;
 
 		if (run_command(state, global_command) != 0) {
-			ed_error(state);
+			// ed_error(state); // TODO remove
+			break;
 		}
 	}
 
@@ -288,7 +350,17 @@ int run_command(ed_state *state, std::string command)
 	if (command.compare("q") == 0) {
 		return command_quit(state);
 	}
+	else if (command.compare("Q") == 0) {
+		state->mod_state = CHANGED_AND_WARNED;
+
+		return command_quit(state);
+	}
 	else if (command.compare("e") == 0) {
+		return command_edit(state);
+	}
+	else if (command.compare("E") == 0) {
+		state->mod_state = CHANGED_AND_WARNED;
+
 		return command_edit(state);
 	}
 	else if (command.compare("f") == 0) {
@@ -306,6 +378,12 @@ int run_command(ed_state *state, std::string command)
 	else if (command.compare("P") == 0) {
 		return command_prompt(state);
 	}
+	else if (command.compare("h") == 0) {
+		return command_print_error(state);
+	}
+	else if (command.compare("H") == 0) {
+		return command_toggle_print_error(state);
+	}
 	else if (command.compare("w") == 0) {
 		return command_write(state);
 	}
@@ -321,7 +399,7 @@ int run_command(ed_state *state, std::string command)
 	else if (command.compare("g") == 0) {
 		return command_global(state);
 	} else {
-		// TODO set error msg
+		state->error = "Unknown command";
 		return -1;
 	}
 }
@@ -345,7 +423,7 @@ int main(int argc, char **argv)
 		switch (opt) {
 			case 'p':
 				state.promt = optarg;
-				state.printPrompt = true;
+				state.prompt_print = true;
 				break;
 			case 's':
 				state.script = 1;
@@ -363,7 +441,7 @@ int main(int argc, char **argv)
 	do {
 		std::string cmd = "";
 
-		if (state.printPrompt) {
+		if (state.prompt_print) {
 			std::cout << state.promt << std::flush;
 		}
 
@@ -471,8 +549,7 @@ int main(int argc, char **argv)
 				state.addr_iter_begin = std::next(state.buffer.begin(), std::stoi(match) - 1);
 			}
 			else {
-				// std::cout << "Error interpreting (start): " << match << std::endl;
-				// TODO set error msg
+				state.error = "Invalid address";
 				ed_error(&state);
 			}
 		}
@@ -490,8 +567,7 @@ int main(int argc, char **argv)
 				state.addr_iter_end = std::next(state.buffer.begin(), std::stoi(match) - 1);
 			}
 			else {
-				//std::cout << "Error interpreting (end)" << std::endl;
-				// TODO set error msg
+				state.error = "Invalid address";
 				ed_error(&state);
 			}
 		}
