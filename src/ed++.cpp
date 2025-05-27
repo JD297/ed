@@ -20,6 +20,8 @@ typedef struct ed_state {
 	bool printPrompt;
 	std::string promt;
 
+	bool script;
+
 	bool printErrors;
 	std::string error;
 
@@ -32,6 +34,7 @@ void ed_state_init(ed_state *state)
 {
 	state->promt = "*";
 	state->printPrompt = false;
+	state->script = false;
 	state->filename = "src/ed++.cpp";
 	state->buffer = std::list<std::string>();
 	state->runs = true;
@@ -64,7 +67,7 @@ int command_file(ed_state *state)
 		state->filename = matches[1];
 	}
 
-	std::cout << state->filename << "\n";
+	std::cout << state->filename << std::endl;
 
 	return 0;
 }
@@ -92,7 +95,9 @@ int command_edit(ed_state *state)
 		nread += line.length() + 1;
 	}
 
-	std::cout << nread << "\n";
+	if (!state->script) {
+		std::cout << nread << std::endl;
+	}
 
 	state->addr_iter_current = std::prev(state->buffer.end());
 
@@ -102,7 +107,7 @@ int command_edit(ed_state *state)
 int command_print(ed_state *state)
 {
 	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
-		std::cout << *it << "\n";
+		std::cout << *it << std::endl;
 	}
 
 	return 0;
@@ -113,7 +118,7 @@ int command_number(ed_state *state)
 	int line = std::distance(state->buffer.begin(), state->addr_iter_begin) + 1;
 
 	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
-		std::cout << line << "\t" << *it << "\n";
+		std::cout << line << "\t" << *it << std::endl;
 
 		line++;
 	}
@@ -145,10 +150,12 @@ int command_write(ed_state *state)
 	std::ofstream outfile(state->filename);
 
 	for (auto it = state->buffer.begin(); it != state->buffer.end(); it++) {
-		outfile << *it << "\n";
+		outfile << *it << std::endl;
 	}
 
-	std::cout << outfile.tellp() << "\n";
+	if (!state->script) {
+		std::cout << outfile.tellp() << std::endl;
+	}
 
 	return 0;
 }
@@ -319,10 +326,35 @@ int run_command(ed_state *state, std::string command)
 	}
 }
 
-int main()
+void print_usage()
+{
+	std::cerr << TARGET << " [-p string] [-s] [file]" << std::endl;
+	std::cerr << TARGET << " — edit text" << std::endl;
+	std::cerr << std::endl;;
+	std::cerr << "JD297 " << TARGET << " source code <https://github.com/jd297/ed>" << std::endl;
+}
+
+int main(int argc, char **argv)
 {
 	ed_state state;
 	ed_state_init(&state);
+
+	int opt;
+
+	while ((opt = getopt(argc, argv, "sp:")) != -1) {
+		switch (opt) {
+			case 'p':
+				state.promt = optarg;
+				state.printPrompt = true;
+				break;
+			case 's':
+				state.script = 1;
+				break;
+			default:
+				print_usage();
+				exit(EXIT_FAILURE);
+		}
+	}
 
 	if (command_edit(&state) != 0) {
 		ed_error(&state);
@@ -346,7 +378,7 @@ int main()
 				break;
 			}
 
-			if (buf[0] == '\n') {
+			if (buf[0] == '\n') { // TODO NT??
 				break;
 			}
 
