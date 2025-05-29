@@ -424,9 +424,9 @@ int run_command(ed_state *state, std::string command)
 
 void print_usage()
 {
-	std::cerr << TARGET << " [-p string] [-s] [file]" << std::endl;
+	std::cerr << "Usage: " << TARGET << " [-p string] [-s] [file]" << std::endl;
 	std::cerr << TARGET << " — edit text" << std::endl;
-	std::cerr << std::endl;;
+	std::cerr << std::endl;
 	std::cerr << "JD297 " << TARGET << " source code <https://github.com/jd297/ed>" << std::endl;
 }
 
