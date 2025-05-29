@@ -78,7 +78,9 @@ int command_print_error(ed_state *state)
 
 int command_toggle_print_error(ed_state *state)
 {
-	state->error_print = !state->error_print;
+	if ((state->error_print = !state->error_print)) {
+		return command_print_error(state);
+	}
 
 	return 0;
 }
