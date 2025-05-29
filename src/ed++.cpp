@@ -45,7 +45,7 @@ void ed_state_init(ed_state *state)
 	state->error = "";
 	state->error_print = false;
 	state->script = false;
-	state->filename = "src/ed++.cpp";
+	state->filename = "";
 	state->buffer = std::list<std::string>();
 	state->runs = true;
 	state->mod_state = UNCHANGED;
@@ -100,6 +100,12 @@ int command_file(ed_state *state)
 		state->filename = matches[1];
 	}
 
+	if (state->filename.empty()) {
+		state->error = "No current filename";
+
+		return -1;
+	}
+
 	std::cout << state->filename << std::endl;
 
 	return 0;
@@ -122,6 +128,12 @@ int command_edit(ed_state *state)
 
 	if (matches.size() > 1) {
 		state->filename = matches[1];
+	}
+
+	if (state->filename.empty()) {
+		state->error = "No current filename";
+
+		return -1;
 	}
 
 	state->buffer.clear();
@@ -192,6 +204,12 @@ int command_delete(ed_state *state)
 
 int command_write(ed_state *state)
 {
+	if (state->filename.empty()) {
+		state->error = "No current filename";
+
+		return -1;
+	}
+
 	std::ofstream outfile(state->filename);
 
 	for (auto it = state->buffer.begin(); it != state->buffer.end(); it++) {
@@ -434,8 +452,12 @@ int main(int argc, char **argv)
 		}
 	}
 
-	if (command_edit(&state) != 0) {
-		ed_error(&state);
+	if (optind < argc) {
+		state.filename = argv[optind];
+
+		if (command_edit(&state) != 0) {
+			ed_error(&state);
+		}
 	}
 
 	do {
