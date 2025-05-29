@@ -445,26 +445,16 @@ int main(int argc, char **argv)
 			std::cout << state.promt << std::flush;
 		}
 
-		ssize_t nread;
-
-		for (char buf[1]; ; ) {
-			if ((nread = read(STDIN_FILENO, buf, 1)) == -1) {
-				// err(EXIT_FAILURE, "read: cmd");
-			}
-
-			if (nread == 0) {
+		while (int ch = getchar()) {
+			if (ch == EOF || ch == '\n') {
 				break;
 			}
 
-			if (buf[0] == '\n') { // TODO NT??
-				break;
-			}
-
-			cmd.append(buf);
+			cmd += ch;
 		}
 
-		if (nread == 0) {
-			break;
+		if (cmd.length() == 0) {
+			cmd = "q";
 		}
 
 		std::regex address_pattern("^([0-9]+|[$]|[.])");
