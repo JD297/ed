@@ -42,12 +42,21 @@ void ed_state_init(ed_state *state)
 {
 	state->promt = "*";
 	state->prompt_print = false;
+
 	state->error = "";
 	state->error_print = false;
+
 	state->script = false;
+
 	state->filename = "";
+
 	state->buffer = std::list<std::string>();
+	state->addr_iter_current = state->buffer.begin();
+
+	state->addr_iter_begin = state->addr_iter_end = state->buffer.end();
+
 	state->runs = true;
+
 	state->mod_state = UNCHANGED;
 }
 
@@ -585,6 +594,24 @@ int main(int argc, char **argv)
 		}
 		else if (address_start_match.length() > 0) {
 			state.addr_iter_end = state.addr_iter_begin;
+		}
+
+		if (
+			state.addr_iter_begin == state.buffer.end()
+				||
+			state.addr_iter_end == state.buffer.end()
+				||
+			(
+				std::distance(state.buffer.begin(), state.addr_iter_end)
+					<
+				std::distance(state.buffer.begin(), state.addr_iter_begin)
+			)
+
+		) {
+			state.error = "Invalid address";
+			ed_error(&state);
+
+			continue;
 		}
 
 		if (command_match.length() > 0) {
