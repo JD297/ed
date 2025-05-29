@@ -559,6 +559,8 @@ int main(int argc, char **argv)
 			}
 		}
 
+		long last_line_number = std::distance(state.buffer.begin(), state.buffer.end());
+
 		if (address_start_match.length() > 0) {
 			std::string match = address_start_match.str();
 
@@ -569,11 +571,20 @@ int main(int argc, char **argv)
 				state.addr_iter_begin = state.addr_iter_current;
 			}
 			else if (std::all_of(match.begin(), match.end(), ::isdigit)) {
-				state.addr_iter_begin = std::next(state.buffer.begin(), std::stoi(match) - 1);
+				long number = std::stol(match);
+
+				if (number > last_line_number) {
+					state.error = "Invalid address";
+					ed_error(&state);
+					continue;
+				}
+
+				state.addr_iter_begin = std::next(state.buffer.begin(), number - 1);
 			}
 			else {
 				state.error = "Invalid address";
 				ed_error(&state);
+				continue;
 			}
 		}
 
@@ -587,11 +598,20 @@ int main(int argc, char **argv)
 				state.addr_iter_end = state.addr_iter_current;
 			}
 			else if (std::all_of(match.begin(), match.end(), ::isdigit)) {
-				state.addr_iter_end = std::next(state.buffer.begin(), std::stoi(match) - 1);
+				long number = std::stol(match);
+
+				if (number > last_line_number) {
+					state.error = "Invalid address";
+					ed_error(&state);
+					continue;
+				}
+
+				state.addr_iter_end = std::next(state.buffer.begin(), number - 1);
 			}
 			else {
 				state.error = "Invalid address";
 				ed_error(&state);
+				continue;
 			}
 		}
 		else if (address_start_match.length() > 0) {
@@ -612,7 +632,6 @@ int main(int argc, char **argv)
 		) {
 			state.error = "Invalid address";
 			ed_error(&state);
-
 			continue;
 		}
 
