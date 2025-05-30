@@ -34,6 +34,8 @@ typedef struct ed_state {
 	std::string parameters;
 
 	ModState mod_state;
+
+	bool has_cmd_addr;
 } ed_state;
 
 extern int run_command(ed_state *state, std::string command);
@@ -58,6 +60,8 @@ void ed_state_init(ed_state *state)
 	state->runs = true;
 
 	state->mod_state = UNCHANGED;
+
+	state->has_cmd_addr = false;
 }
 
 int command_print_error(ed_state *state)
@@ -225,7 +229,12 @@ int command_write(ed_state *state)
 
 	std::ofstream outfile(state->filename);
 
-	for (auto it = state->buffer.begin(); it != state->buffer.end(); it++) {
+	if (!state->has_cmd_addr) {
+		state->addr_iter_begin = state->buffer.begin();
+		state->addr_iter_end = std::prev(state->buffer.end());
+	}
+
+	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
 		outfile << *it << std::endl;
 	}
 
@@ -474,6 +483,8 @@ int main(int argc, char **argv)
 	}
 
 	do {
+		state.has_cmd_addr = false;
+
 		std::string cmd = "";
 
 		if (state.prompt_print) {
@@ -497,10 +508,16 @@ int main(int argc, char **argv)
 		std::smatch address_start_match;
 
 		if (std::regex_search(cmd, address_start_match, address_pattern)) {
-//			std::cout << "Match found (address_start_match): " << address_start_match.str() << std::endl;
-//			std::cout << "Length: " << address_start_match.length() << std::endl;
+			state.has_cmd_addr = true;
+
+			#ifdef DEBUG_ADDR
+			std::cout << "Match found (address_start_match): " << address_start_match.str() << std::endl;
+			std::cout << "Length: " << address_start_match.length() << std::endl;
+			#endif
 		} else {
-//			std::cout << "No match found (start)." << std::endl;
+			#ifdef DEBUG_ADDR
+			std::cout << "No match found (start)." << std::endl;
+			#endif
 		}
 
 		std::regex address_seperator_pattern("^([,]|[;])");
@@ -509,10 +526,16 @@ int main(int argc, char **argv)
 		std::string cmd_sep = cmd.substr(address_start_match.length());
 
 		if (std::regex_search(cmd_sep, address_seperator_match, address_seperator_pattern)) {
-//			std::cout << "Match found (address_seperator_match): " << address_seperator_match.str() << std::endl;
-//			std::cout << "Length: " << address_seperator_match.length() << std::endl;
+			state.has_cmd_addr = true;
+
+			#ifdef DEBUG_ADDR
+			std::cout << "Match found (address_seperator_match): " << address_seperator_match.str() << std::endl;
+			std::cout << "Length: " << address_seperator_match.length() << std::endl;
+			#endif
 		} else {
-//			std::cout << "No match found (seperator)." << std::endl;
+			#ifdef DEBUG_ADDR
+			std::cout << "No match found (seperator)." << std::endl;
+			#endif
 		}
 
 		std::smatch address_end_match;
@@ -520,10 +543,16 @@ int main(int argc, char **argv)
 		std::string cmd_end = cmd_sep.substr(address_seperator_match.length());
 
 		if (std::regex_search(cmd_end, address_end_match, address_pattern)) {
-//			std::cout << "Match found (address_end_match): " << address_end_match.str() << std::endl;
-//			std::cout << "Length: " << address_end_match.length() << std::endl;
+			state.has_cmd_addr = true;
+
+			#ifdef DEBUG_ADDR
+			std::cout << "Match found (address_end_match): " << address_end_match.str() << std::endl;
+			std::cout << "Length: " << address_end_match.length() << std::endl;
+			#endif
 		} else {
-//			std::cout << "No match found (end)." << std::endl;
+			#ifdef DEBUG_ADDR
+			std::cout << "No match found (end)." << std::endl;
+			#endif
 		}
 
 		std::regex command_pattern("^([a-zA-Z])(.*+)");
@@ -532,13 +561,17 @@ int main(int argc, char **argv)
 		std::string cmd_com = cmd_end.substr(address_end_match.length());
 
 		if (std::regex_search(cmd_com, command_match, command_pattern)) {
-//			std::cout << "Match found: " << command_match.str() << std::endl;
-//			std::cout << "Length: " << command_match.length() << std::endl;
-//			for (long int i = 0; i < command_match.length(); i++)
-//				std::cout << "match[" << i << "]:" << command_match[i] << std::endl;
+			#ifdef DEBUG_CMD
+			std::cout << "Match found: " << command_match.str() << std::endl;
+			std::cout << "Length: " << command_match.length() << std::endl;
+			for (long int i = 0; i < command_match.length(); i++)
+				std::cout << "match[" << i << "]:" << command_match[i] << std::endl;
+			#endif
 
 		} else {
-//			std::cout << "No match found (command)." << std::endl;
+			#ifdef DEBUG_CMD
+			std::cout << "No match found (command)." << std::endl;
+			#endif
 		}
 
 
