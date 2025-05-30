@@ -60,20 +60,22 @@ void ed_state_init(ed_state *state)
 	state->mod_state = UNCHANGED;
 }
 
+int command_print_error(ed_state *state)
+{
+	if (state->error.length() > 0) {
+		std::cout << state->error << std::endl;
+	}
+
+	return 0;
+}
+
 void ed_error(ed_state *state)
 {
 	std::cout << "?" << std::endl;
 
 	if (state->error_print) {
-		std::cout << state->error << std::endl;
+		command_print_error(state);
 	}
-}
-
-int command_print_error(ed_state *state)
-{
-	std::cout << state->error << std::endl;
-
-	return 0;
 }
 
 int command_toggle_print_error(ed_state *state)
