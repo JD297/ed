@@ -182,6 +182,8 @@ int command_print(ed_state *state)
 		std::cout << *it << std::endl;
 	}
 
+	state->addr_iter_current = state->addr_iter_end;
+
 	return 0;
 }
 
@@ -194,6 +196,8 @@ int command_number(ed_state *state)
 
 		line++;
 	}
+
+	state->addr_iter_current = state->addr_iter_end;
 
 	return 0;
 }
@@ -212,7 +216,7 @@ int command_delete(ed_state *state)
 		it = state->buffer.erase(it);
 	}
 
-	state->addr_iter_end = addr_iter_temp;
+	state->addr_iter_current = addr_iter_temp;
 
 	state->mod_state = CHANGED;
 
@@ -256,7 +260,7 @@ int command_prompt(ed_state *state)
 
 int command_append(ed_state *state)
 {
-	state->addr_iter_end = state->addr_iter_begin;
+	state->addr_iter_current = state->addr_iter_begin;
 
 	while (1) {
 		std::string line;
@@ -268,9 +272,9 @@ int command_append(ed_state *state)
 			break;
 		}
 
-		state->buffer.insert(std::next(state->addr_iter_end), line);
+		state->buffer.insert(std::next(state->addr_iter_current), line);
 
-		state->addr_iter_end = std::next(state->addr_iter_end);
+		state->addr_iter_current = std::next(state->addr_iter_current);
 	}
 
 	state->mod_state = CHANGED;
@@ -280,7 +284,7 @@ int command_append(ed_state *state)
 
 int command_insert(ed_state *state)
 {
-	state->addr_iter_end = state->addr_iter_begin;
+	state->addr_iter_current = state->addr_iter_begin;
 
 	while (1) {
 		std::string line;
@@ -294,7 +298,7 @@ int command_insert(ed_state *state)
 
 		state->buffer.insert(state->addr_iter_begin, line);
 
-		state->addr_iter_end = std::prev(state->addr_iter_begin);
+		state->addr_iter_current = std::prev(state->addr_iter_begin);
 	}
 
 	state->mod_state = CHANGED;
@@ -320,6 +324,8 @@ int command_substitute(ed_state *state)
 	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
 		*it = std::regex_replace(*it, regex_search_pattern, rpl);
 	}
+
+	state->addr_iter_current = state->addr_iter_end;
 
 	state->mod_state = CHANGED;
 
@@ -382,6 +388,19 @@ int command_global(ed_state *state)
 		}
 	}
 
+	state->addr_iter_current = state->addr_iter_end;
+
+	return 0;
+}
+
+int command_line_number(ed_state *state)
+{
+	if (!state->has_cmd_addr) {
+		state->addr_iter_end = std::prev(state->buffer.end());
+	}
+
+	std::cout << std::distance(state->buffer.begin(), state->addr_iter_end) + 1 << std::endl;
+
 	return 0;
 }
 
@@ -389,6 +408,9 @@ int run_command(ed_state *state, std::string command)
 {
 	if (command.compare("q") == 0) {
 		return command_quit(state);
+	}
+	else if (command.compare("=") == 0) {
+		return command_line_number(state);
 	}
 	else if (command.compare("Q") == 0) {
 		state->mod_state = CHANGED_AND_WARNED;
@@ -555,7 +577,7 @@ int main(int argc, char **argv)
 			#endif
 		}
 
-		std::regex command_pattern("^([a-zA-Z])(.*+)");
+		std::regex command_pattern("^([a-zA-Z=])(.*+)");
 		std::smatch command_match;
 
 		std::string cmd_com = cmd_end.substr(address_end_match.length());
@@ -679,9 +701,6 @@ int main(int argc, char **argv)
 				ed_error(&state);
 			}
 		}
-
-
-		state.addr_iter_current = state.addr_iter_end;
 	} while (state.runs);
 
 	return 0;
