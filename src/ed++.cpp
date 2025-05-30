@@ -53,7 +53,7 @@ void ed_state_init(ed_state *state)
 	state->buffer = std::list<std::string>();
 	state->addr_iter_current = state->buffer.begin();
 
-	state->addr_iter_begin = state->addr_iter_end = state->buffer.end();
+	state->addr_iter_begin = state->addr_iter_end = state->buffer.begin();
 
 	state->runs = true;
 
@@ -621,9 +621,9 @@ int main(int argc, char **argv)
 		}
 
 		if (
-			state.addr_iter_begin == state.buffer.end()
+			(state.addr_iter_begin == state.buffer.end() && !state.buffer.empty())
 				||
-			state.addr_iter_end == state.buffer.end()
+			(state.addr_iter_end == state.buffer.end() && !state.buffer.empty())
 				||
 			(
 				std::distance(state.buffer.begin(), state.addr_iter_end)
