@@ -636,19 +636,22 @@ int main(int argc, char **argv)
 
 		std::regex address_seperator_pattern("^([,]|[;])");
 		std::smatch address_seperator_match;
+		std::string address_seperator_match_str = "";
 
 		#ifdef DEBUG_ADDR
 		std::cout << "===SEPERATOR DBG:" << std::endl;
 		#endif
 
 		if (std::regex_search(state.cmd, address_seperator_match, address_seperator_pattern)) {
-			state.cmd = state.cmd.substr(address_seperator_match.str().length());
+			address_seperator_match_str = address_seperator_match.str();
+
+			state.cmd = state.cmd.substr(address_seperator_match_str.length());
 			state.has_cmd_addr = true;
 
 			#ifdef DEBUG_ADDR
-			std::cout << "\tMatch found (address_seperator_match): " << address_seperator_match.str() << std::endl;
-			std::cout << "\tLength: " << address_seperator_match.length() << std::endl;
+			std::cout << "\tMatch found (address_seperator_match): " << address_seperator_match_str << std::endl;
 			#endif
+
 		} else {
 			#ifdef DEBUG_ADDR
 			std::cout << "\tNo match found (seperator)." << std::endl;
@@ -683,21 +686,17 @@ int main(int argc, char **argv)
 		}
 
 		if (interpret_result_begin == 1 && interpret_result_end == 1) {
-			if (address_seperator_match.length() == 0) {
+			if (address_seperator_match_str.empty()) {
 				state.addr_iter_begin = state.addr_iter_current;
 				state.addr_iter_end = state.addr_iter_current;
 			}
-			else {
-				std::string match = address_seperator_match.str();
-
-				if (match.compare(",") == 0) {
-					state.addr_iter_begin = state.buffer.begin();
-					state.addr_iter_end = std::prev(state.buffer.end());
-				}
-				else if (match.compare(";") == 0) {
-					state.addr_iter_begin = state.addr_iter_current;
-					state.addr_iter_end = std::prev(state.buffer.end());
-				}
+			else if (address_seperator_match_str.compare(",") == 0) {
+				state.addr_iter_begin = state.buffer.begin();
+				state.addr_iter_end = std::prev(state.buffer.end());
+			}
+			else if (address_seperator_match_str.compare(";") == 0) {
+				state.addr_iter_begin = state.addr_iter_current;
+				state.addr_iter_end = std::prev(state.buffer.end());
 			}
 		}
 		else if (interpret_result_end == 1 && interpret_result_begin == 0) {
