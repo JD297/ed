@@ -32,7 +32,6 @@ typedef struct ed_state {
 	std::string error;
 
 	std::string cmd;
-	std::string parameters; // TODO -- is replaced by cmd
 
 	ModState mod_state;
 
@@ -114,7 +113,7 @@ int command_file(ed_state *state)
 	std::regex pattern("^\\s\\s*(.*)");
 	std::smatch matches;
 
-	std::regex_search(state->parameters, matches, pattern);
+	std::regex_search(state->cmd, matches, pattern);
 
 	if (matches.size() > 1) {
 		state->filename = matches[1];
@@ -144,7 +143,7 @@ int command_edit(ed_state *state)
 	std::regex pattern("^\\s\\s*(.*)");
 	std::smatch matches;
 
-	std::regex_search(state->parameters, matches, pattern);
+	std::regex_search(state->cmd, matches, pattern);
 
 	if (matches.size() > 1) {
 		state->filename = matches[1];
@@ -314,7 +313,7 @@ int command_substitute(ed_state *state)
 	std::regex pattern("^/([^/]+)/([^/]+)/");
 	std::smatch matches;
 
-	std::regex_search(state->parameters, matches, pattern);
+	std::regex_search(state->cmd, matches, pattern);
 
 	if (matches.size() < 2) {
 		return -1;
@@ -340,7 +339,7 @@ int command_global(ed_state *state)
 	std::regex pattern("^/([^/]+)/?([a-zA-Z])?");
 	std::smatch matches;
 
-	std::regex_search(state->parameters, matches, pattern);
+	std::regex_search(state->cmd, matches, pattern);
 
 	std::string global_command = "p";
 
@@ -729,7 +728,6 @@ int main(int argc, char **argv)
 		}
 
 		state.cmd = state.cmd.substr(match.length());
-		state.parameters = state.cmd; // TODO --
 
 		if (run_command(&state, match) != 0) {
 			ed_error(&state);
