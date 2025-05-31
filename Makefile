@@ -40,4 +40,4 @@ uninstall:
 .PHONY: tests-always-fail
 
 tests: $(TARGETDIR)/$(TARGET) tests-always-fail
-	make -f $(TESTDIR)/Makefile TESTDIR="$(TESTDIR)" CC="$(CC)" CCINCLUDE="$(CCINCLUDE)" CCFLAGS="$(CCFLAGS)" BUILDDIR="$(BUILDDIR)" TARGET="$(TARGET)" SRCFILEEXT="$(SRCFILEEXT)" OBJFILEEXT="$(OBJFILEEXT)" OBJFILES="$(OBJFILES)"
+	TARGET=$(TARGETDIR)/$(TARGET) testsh --test
