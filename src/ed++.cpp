@@ -38,6 +38,8 @@ typedef struct ed_state {
 	bool has_cmd_addr;
 
 	int num_addr;
+
+	std::string last_re;
 } ed_state;
 
 extern int run_command(ed_state *state, std::string command);
@@ -70,6 +72,8 @@ void ed_state_init(ed_state *state)
 	state->has_cmd_addr = false;
 
 	state->num_addr = 0;
+
+	state->last_re = "";
 }
 
 int command_print_error(ed_state *state)
@@ -601,7 +605,7 @@ typedef enum {
 
 AddrPartResult interpret_addr_part(ed_state *state, std::list<std::string>::iterator *addr_it, ssize_t line_offset, ssize_t line_max)
 {
-	std::regex r_pattern("^([\\s]+|[+-]([0-9]+)*|[0-9]+|[$]|[.])");
+	std::regex r_pattern("^([\\s]+|[+-]([0-9]+)*|[0-9]+|[$]|[.]|[?]|[/])");
 	std::smatch r_match;
 
 	bool first_run;
@@ -643,6 +647,74 @@ AddrPartResult interpret_addr_part(ed_state *state, std::list<std::string>::iter
 				ed_error(state);
 				return ERROR;
 			}
+		}
+		else if (match.compare("/") == 0 || match.compare("?") == 0) {
+			size_t i = 0;
+			size_t ends = 0;
+
+			// TODO regex
+			while (i < state->cmd.length()) {
+				if (state->cmd.at(i) == match.at(0)) {
+					if (i >= 1 && state->cmd.at(i-1) == '\\') {
+						i++;
+						continue;
+					}
+
+					ends = 1;
+
+					break;
+				}
+
+				i++;
+			}
+
+			std::string re;
+
+			if (i == 0) {
+				re = state->last_re;
+			} else {
+				re = state->cmd.substr(0, i);
+				state->last_re = re;
+				state->cmd = state->cmd.substr(i + ends);
+			}
+
+			if (re.length() == 0) {
+				state->error = "No previous pattern";
+				ed_error(state);
+				return ERROR;
+			}
+
+			std::regex re_pattern(re);
+			std::smatch re_match;
+
+			std::list<std::string>::iterator it;
+
+			if (match.at(0) == '/') it = std::next(state->addr_iter_current);
+			else it = std::prev(state->addr_iter_current); // == '?'
+
+			auto end = it;
+
+			do {
+				if (it == state->buffer.end()) {
+					if (match.at(0) == '/') it++;
+					else it--; // == '?'
+
+					continue;
+				}
+
+				if (std::regex_search(*it, re_match, re_pattern)) {
+					*addr_it = it;
+
+					return MATCH;
+				}
+
+				if (match.at(0) == '/') it++;
+				else it--; // == '?'
+			} while (it != end);
+
+			state->error = "No match";
+			ed_error(state);
+			return ERROR;
 		}
 		else if (std::all_of(match.begin(), match.end(), ::isdigit)) {
 			long number = std::stol(match);
