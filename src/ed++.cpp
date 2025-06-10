@@ -18,6 +18,7 @@ typedef struct ed_state {
 	std::list<std::string>::iterator addr_iter_current;
 	std::list<std::string>::iterator addr_iter_begin;
 	std::list<std::string>::iterator addr_iter_end;
+	std::list<std::string>::iterator addr_iter_marked['z'];
 
 	std::string filename;
 
@@ -46,6 +47,15 @@ extern int run_command(ed_state *state, std::string command);
 
 extern int validate_addr(ed_state *state, int expected_num_addr);
 
+void invalid_marked_addr_iter(ed_state *state, std::list<std::string>::iterator it)
+{
+	for (int i = 0; i < 'z'; i++) {
+		if (state->addr_iter_marked[i] == it) {
+			state->addr_iter_marked[i] = (std::list<std::string>::iterator)NULL;
+		}
+	}
+}
+
 void ed_state_init(ed_state *state)
 {
 	state->promt = "*";
@@ -64,6 +74,8 @@ void ed_state_init(ed_state *state)
 	state->addr_iter_current = state->buffer.begin();
 
 	state->addr_iter_begin = state->addr_iter_end = state->buffer.begin();
+
+	std::fill(std::begin(state->addr_iter_marked), std::end(state->addr_iter_marked), (std::list<std::string>::iterator)NULL);
 
 	state->runs = true;
 
@@ -187,6 +199,8 @@ int command_edit(ed_state *state)
 
 	state->buffer.clear();
 
+	std::fill(std::begin(state->addr_iter_marked), std::end(state->addr_iter_marked), (std::list<std::string>::iterator)NULL);
+
 	std::ifstream file(state->filename);
 
 	size_t nread = 0;
@@ -272,6 +286,8 @@ int command_delete(ed_state *state)
 	auto end = std::next(state->addr_iter_end);
 
 	for (auto it = state->addr_iter_begin; it != end; ) {
+		invalid_marked_addr_iter(state, it);
+
 		it = state->buffer.erase(it);
 	}
 
@@ -419,6 +435,8 @@ int command_substitute(ed_state *state)
 	std::regex regex_search_pattern(rsp);
 
 	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
+		invalid_marked_addr_iter(state, it); // TODO only when a match happend
+
 		*it = std::regex_replace(*it, regex_search_pattern, rpl);
 	}
 
@@ -514,6 +532,28 @@ int command_line_number(ed_state *state)
 	return 0;
 }
 
+int command_mark(ed_state *state)
+{
+	if (!state->has_cmd_addr) {
+		state->addr_iter_begin = state->addr_iter_current;
+	}
+
+	if (validate_addr(state, 1) != 0) {
+		return -1;
+	}
+
+	int x = (int)state->cmd.at(0);
+
+	if (islower(x) == 0) {
+		state->error = "Invalid mark character";
+		return -1;
+	}
+
+	state->addr_iter_marked[x - 'a'] = state->addr_iter_begin;
+
+	return 0;
+}
+
 int command_null(ed_state *state)
 {
 	if (validate_addr(state, 1) != 0) {
@@ -527,6 +567,9 @@ int run_command(ed_state *state, std::string command)
 {
 	if (command.compare("q") == 0) {
 		return command_quit(state);
+	}
+	else if (command.compare("k") == 0) {
+		return command_mark(state);
 	}
 	else if (command.compare("=") == 0) {
 		return command_line_number(state);
@@ -605,7 +648,7 @@ typedef enum {
 
 AddrPartResult interpret_addr_part(ed_state *state, std::list<std::string>::iterator *addr_it, ssize_t line_offset, ssize_t line_max)
 {
-	std::regex r_pattern("^([\\s]+|[+-]([0-9]+)*|[0-9]+|[$]|[.]|[?]|[/])");
+	std::regex r_pattern("^([\\s]+|[+-]([0-9]+)*|[0-9]+|[$]|[.]|[?]|[/]|'.?)");
 	std::smatch r_match;
 
 	bool first_run;
@@ -647,6 +690,31 @@ AddrPartResult interpret_addr_part(ed_state *state, std::list<std::string>::iter
 				ed_error(state);
 				return ERROR;
 			}
+		}
+		else if (match.at(0) == '\'') {
+			if (match.length() == 1) {
+				state->error = "Invalid mark character";
+				ed_error(state);
+				return ERROR;
+			}
+
+			int x = (int)match.at(1);
+
+			if (islower(x) == 0) {
+				state->error = "Invalid mark character";
+				ed_error(state);
+				return ERROR;
+			}
+
+			auto marked_iter = state->addr_iter_marked[x - 'a'];
+
+			if (marked_iter == (std::list<std::string>::iterator)NULL) {
+				state->error = "Invalid address";
+				ed_error(state);
+				return ERROR;
+			}
+
+			line_offset = std::distance(state->buffer.begin(), marked_iter) + 1;
 		}
 		else if (match.compare("/") == 0 || match.compare("?") == 0) {
 			size_t i = 0;
