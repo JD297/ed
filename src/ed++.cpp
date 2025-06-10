@@ -6,6 +6,8 @@
 #include <algorithm>
 #include <cctype>
 #include <unistd.h>
+#include <iomanip>
+#include <sys/ioctl.h>
 
 typedef enum {
 	UNCHANGED,
@@ -554,6 +556,69 @@ int command_mark(ed_state *state)
 	return 0;
 }
 
+int command_list(ed_state *state)
+{
+	if (!state->has_cmd_addr) {
+		state->addr_iter_begin = state->addr_iter_current;
+		state->addr_iter_end = state->addr_iter_current;
+	}
+
+	if (validate_addr(state, 2) != 0) {
+		return -1;
+	}
+
+	size_t cols = 72;
+	size_t printed = 0;
+
+	#ifdef TIOCGWINSZ
+	struct winsize w;
+
+	if (ioctl(STDOUT_FILENO, TIOCGWINSZ, &w) == 0) {
+		cols = w.ws_col - 8;
+	}
+	#endif
+
+	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
+		for (unsigned char ch : *it) {
+			if (printed >= cols) {
+				printed = 0;
+
+				std::cout << "\\" << std::endl;
+			}
+
+			switch (ch) {
+				case '\\': std::cout << "\\\\"; printed += 2; break;
+				case '\a': std::cout << "\\a";  printed += 2; break;
+				case '\b': std::cout << "\\b";  printed += 2; break;
+				case '\f': std::cout << "\\f";  printed += 2; break;
+				case '\r': std::cout << "\\r";  printed += 2; break;
+				case '\t': std::cout << "\\t";  printed += 2; break;
+				case '\v': std::cout << "\\v";  printed += 2; break;
+				case '$' : std::cout << "\\$";  printed += 2; break;
+				default: {
+					if (isprint((int)ch) != 0) {
+						std::cout << ch;
+
+						++printed;
+					} else {
+						std::cout << "\\" << std::setfill('0') << std::setw(3) << std::oct << (int)ch;
+
+						printed += 4;
+					}
+				} break;
+			}
+		}
+
+		std::cout << "$" << std::endl;
+
+		printed = 0;
+	}
+
+	state->addr_iter_current = state->addr_iter_end;
+
+	return 0;
+}
+
 int command_null(ed_state *state)
 {
 	if (validate_addr(state, 1) != 0) {
@@ -567,6 +632,9 @@ int run_command(ed_state *state, std::string command)
 {
 	if (command.compare("q") == 0) {
 		return command_quit(state);
+	}
+	else if (command.compare("l") == 0) {
+		return command_list(state);
 	}
 	else if (command.compare("k") == 0) {
 		return command_mark(state);
