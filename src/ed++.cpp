@@ -1091,5 +1091,9 @@ int main(int argc, char **argv)
 		}
 	} while (state.runs);
 
-	return 0;
+	if (state.error.length() != 0) {
+		return EXIT_FAILURE;
+	}
+
+	return EXIT_SUCCESS;
 }
