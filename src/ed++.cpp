@@ -771,18 +771,20 @@ AddrPartResult interpret_addr_part(ed_state *state, std::list<std::string>::iter
 				}
 
 				if (std::regex_search(*it, re_match, re_pattern)) {
-					*addr_it = it;
+					line_offset = std::distance(state->buffer.begin(), it) + 1;
 
-					return MATCH;
+					break;
 				}
 
 				if (match.at(0) == '/') it++;
 				else it--; // == '?'
 			} while (it != end);
 
-			state->error = "No match";
-			ed_error(state);
-			return ERROR;
+			if (it == end) {
+				state->error = "No match";
+				ed_error(state);
+				return ERROR;
+			}
 		}
 		else if (std::all_of(match.begin(), match.end(), ::isdigit)) {
 			long number = std::stol(match);
