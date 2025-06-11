@@ -53,7 +53,7 @@ void invalid_marked_addr_iter(ed_state *state, std::list<std::string>::iterator 
 {
 	for (int i = 0; i < 'z'; i++) {
 		if (state->addr_iter_marked[i] == it) {
-			state->addr_iter_marked[i] = (std::list<std::string>::iterator)NULL;
+			state->addr_iter_marked[i] = state->buffer.end();
 		}
 	}
 }
@@ -77,7 +77,7 @@ void ed_state_init(ed_state *state)
 
 	state->addr_iter_begin = state->addr_iter_end = state->buffer.begin();
 
-	std::fill(std::begin(state->addr_iter_marked), std::end(state->addr_iter_marked), (std::list<std::string>::iterator)NULL);
+	std::fill(std::begin(state->addr_iter_marked), std::end(state->addr_iter_marked), state->buffer.end());
 
 	state->runs = true;
 
@@ -201,7 +201,7 @@ int command_edit(ed_state *state)
 
 	state->buffer.clear();
 
-	std::fill(std::begin(state->addr_iter_marked), std::end(state->addr_iter_marked), (std::list<std::string>::iterator)NULL);
+	std::fill(std::begin(state->addr_iter_marked), std::end(state->addr_iter_marked), state->buffer.end());
 
 	std::ifstream file(state->filename);
 
@@ -776,7 +776,7 @@ AddrPartResult interpret_addr_part(ed_state *state, std::list<std::string>::iter
 
 			auto marked_iter = state->addr_iter_marked[x - 'a'];
 
-			if (marked_iter == (std::list<std::string>::iterator)NULL) {
+			if (marked_iter == state->buffer.end()) {
 				state->error = "Invalid address";
 				ed_error(state);
 				return ERROR;
