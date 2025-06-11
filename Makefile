@@ -15,7 +15,7 @@ OBJFILEEXT    = o
 OBJFILES      = $(patsubst $(SRCDIR)/%.$(SRCFILEEXT),$(BUILDDIR)/%.$(OBJFILEEXT),$(SRCFILES))
 
 
-CC            = g++
+CC            = c++
 CCLIBS        = -static
 CCFLAGS       = -Wall -Wextra -Wpedantic -g
 CCINCLUDE     = -I $(SRCINCLUDEDIR)
