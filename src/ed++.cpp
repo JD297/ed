@@ -20,6 +20,10 @@ typedef struct ed_state {
 	std::list<std::string>::iterator addr_iter_current;
 	std::list<std::string>::iterator addr_iter_begin;
 	std::list<std::string>::iterator addr_iter_end;
+	ssize_t addr_offset_current;
+	ssize_t addr_offset_begin;
+	ssize_t addr_offset_end;
+	ssize_t addr_offset_max;
 	std::list<std::string>::iterator addr_iter_marked['z'];
 
 	std::string filename;
@@ -47,7 +51,27 @@ typedef struct ed_state {
 
 extern int run_command(ed_state *state, std::string command);
 
-extern int validate_addr(ed_state *state, int expected_num_addr);
+extern int validate_addr(ed_state *state, int expected_num_addr, bool allow_zero_addr);
+
+#define VALIDATE_ADDR_EXPECT_NO_ADDR()\
+	if (validate_addr(state, 0, false) != 0) {\
+		return -1;\
+	}
+
+#define VALIDATE_ADDR_EXPECT_MULTI_ADDR()\
+	if (validate_addr(state, 2, false) != 0) {\
+		return -1;\
+	}
+
+#define VALIDATE_ADDR_EXPECT_SINGLE_ADDR_NON_ZERO()\
+	if (validate_addr(state, 1, false) != 0) {\
+		return -1;\
+	}
+
+#define VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO()\
+	if (validate_addr(state, 1, true) != 0) {\
+		return -1;\
+	}
 
 void invalid_marked_addr_iter(ed_state *state, std::list<std::string>::iterator it)
 {
@@ -73,9 +97,11 @@ void ed_state_init(ed_state *state)
 	state->cmd = "";
 
 	state->buffer = std::list<std::string>();
-	state->addr_iter_current = state->buffer.begin();
 
-	state->addr_iter_begin = state->addr_iter_end = state->buffer.begin();
+	state->addr_offset_current = 0;
+	state->addr_offset_begin = 0;
+	state->addr_offset_end = 0;
+	state->addr_offset_max = 0;
 
 	std::fill(std::begin(state->addr_iter_marked), std::end(state->addr_iter_marked), state->buffer.end());
 
@@ -90,15 +116,33 @@ void ed_state_init(ed_state *state)
 	state->last_re = "";
 }
 
-int command_print_error(ed_state *state)
+void ed_state_set_addr_iter(ed_state *state)
 {
-	if (validate_addr(state, 0) != 0) {
-		return -1;
+	if (state->addr_offset_begin == 0) {
+		state->addr_iter_begin = state->buffer.begin();
+	} else {
+		state->addr_iter_begin = std::next(state->buffer.begin(), state->addr_offset_begin - 1);
 	}
 
+	if (state->addr_offset_end == 0) {
+		state->addr_iter_end = state->buffer.begin();
+	} else {
+		state->addr_iter_end = std::next(state->buffer.begin(), state->addr_offset_end - 1);
+	}
+}
+
+void ed_print_error(ed_state *state)
+{
 	if (state->error.length() > 0) {
 		std::cout << state->error << std::endl;
 	}
+}
+
+int command_print_error(ed_state *state)
+{
+	VALIDATE_ADDR_EXPECT_NO_ADDR();
+
+	ed_print_error(state);
 
 	return 0;
 }
@@ -108,15 +152,13 @@ void ed_error(ed_state *state)
 	std::cout << "?" << std::endl;
 
 	if (state->error_print) {
-		command_print_error(state);
+		ed_print_error(state);
 	}
 }
 
 int command_toggle_print_error(ed_state *state)
 {
-	if (validate_addr(state, 0) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_NO_ADDR();
 
 	if ((state->error_print = !state->error_print)) {
 		return command_print_error(state);
@@ -127,9 +169,7 @@ int command_toggle_print_error(ed_state *state)
 
 int command_quit(ed_state *state)
 {
-	if (validate_addr(state, 0) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_NO_ADDR();
 
 	if (state->mod_state == CHANGED) {
 		state->mod_state = CHANGED_AND_WARNED;
@@ -146,9 +186,7 @@ int command_quit(ed_state *state)
 
 int command_file(ed_state *state)
 {
-	if (validate_addr(state, 0) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_NO_ADDR();
 
 	std::regex pattern("^\\s\\s*(.*)");
 	std::smatch matches;
@@ -172,9 +210,7 @@ int command_file(ed_state *state)
 
 int command_edit(ed_state *state)
 {
-	if (validate_addr(state, 0) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_NO_ADDR();
 
 	if (state->mod_state == CHANGED) {
 		state->mod_state = CHANGED_AND_WARNED;
@@ -217,7 +253,7 @@ int command_edit(ed_state *state)
 		std::cout << nread << std::endl;
 	}
 
-	state->addr_iter_current = std::prev(state->buffer.end());
+	state->addr_offset_current = state->buffer.size();
 
 	state->mod_state = UNCHANGED;
 
@@ -227,19 +263,19 @@ int command_edit(ed_state *state)
 int command_print(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_iter_begin = state->addr_iter_current;
-		state->addr_iter_end = state->addr_iter_current;
+		state->addr_offset_begin = state->addr_offset_current;
+		state->addr_offset_end = state->addr_offset_current;
 	}
 
-	if (validate_addr(state, 2) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+
+	ed_state_set_addr_iter(state);
 
 	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
 		std::cout << *it << std::endl;
 	}
 
-	state->addr_iter_current = state->addr_iter_end;
+	state->addr_offset_current = state->addr_offset_end;
 
 	return 0;
 }
@@ -247,15 +283,15 @@ int command_print(ed_state *state)
 int command_number(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_iter_begin = state->addr_iter_current;
-		state->addr_iter_end = state->addr_iter_current;
+		state->addr_offset_begin = state->addr_offset_current;
+		state->addr_offset_end = state->addr_offset_current;
 	}
 
-	if (validate_addr(state, 2) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
 
-	int line = std::distance(state->buffer.begin(), state->addr_iter_begin) + 1;
+	ed_state_set_addr_iter(state);
+
+	ssize_t line = state->addr_offset_begin;
 
 	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
 		std::cout << line << "\t" << *it << std::endl;
@@ -263,7 +299,7 @@ int command_number(ed_state *state)
 		line++;
 	}
 
-	state->addr_iter_current = state->addr_iter_end;
+	state->addr_offset_current = state->addr_offset_end;
 
 	return 0;
 }
@@ -271,17 +307,17 @@ int command_number(ed_state *state)
 int command_delete(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_iter_begin = state->addr_iter_current;
-		state->addr_iter_end = state->addr_iter_current;
+		state->addr_offset_begin = state->addr_offset_current;
+		state->addr_offset_end = state->addr_offset_current;
 	}
 
-	if (validate_addr(state, 2) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+
+	ed_state_set_addr_iter(state);
 
 	auto addr_iter_temp = std::next(state->addr_iter_end);
 
-	if (addr_iter_temp == std::prev(state->buffer.end()) || addr_iter_temp == state->buffer.end()) {
+	if (addr_iter_temp == state->buffer.end()) {
 		addr_iter_temp = std::prev(state->addr_iter_begin);
 	}
 
@@ -293,7 +329,11 @@ int command_delete(ed_state *state)
 		it = state->buffer.erase(it);
 	}
 
-	state->addr_iter_current = addr_iter_temp;
+	if (state->buffer.size() == 0) {
+		state->addr_offset_current = 0;
+	} else {
+		state->addr_offset_current = std::distance(state->buffer.begin(), addr_iter_temp) + 1;
+	}
 
 	state->mod_state = CHANGED;
 
@@ -302,15 +342,6 @@ int command_delete(ed_state *state)
 
 int command_write(ed_state *state)
 {
-	if (!state->has_cmd_addr) {
-		state->addr_iter_begin = state->buffer.begin();
-		state->addr_iter_end = std::prev(state->buffer.end());
-	}
-
-	if (validate_addr(state, 2) != 0) {
-		return -1;
-	}
-
 	if (state->filename.empty()) {
 		state->error = "No current filename";
 
@@ -320,9 +351,13 @@ int command_write(ed_state *state)
 	std::ofstream outfile(state->filename);
 
 	if (!state->has_cmd_addr) {
-		state->addr_iter_begin = state->buffer.begin();
-		state->addr_iter_end = std::prev(state->buffer.end());
+		state->addr_offset_begin = 1;
+		state->addr_offset_end = state->addr_offset_max;
 	}
+
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+
+	ed_state_set_addr_iter(state);
 
 	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
 		outfile << *it << std::endl;
@@ -339,9 +374,7 @@ int command_write(ed_state *state)
 
 int command_prompt(ed_state *state)
 {
-	if (validate_addr(state, 0) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_NO_ADDR();
 
 	state->prompt_print = !state->prompt_print;
 
@@ -351,12 +384,12 @@ int command_prompt(ed_state *state)
 int command_append(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_iter_begin = state->addr_iter_current;
+		state->addr_offset_begin = state->addr_offset_current;
 	}
 
-	if (validate_addr(state, 1) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO();
+
+	ed_state_set_addr_iter(state);
 
 	state->addr_iter_current = state->addr_iter_begin;
 
@@ -370,12 +403,20 @@ int command_append(ed_state *state)
 			break;
 		}
 
-		state->buffer.insert(std::next(state->addr_iter_current), line);
+		if (state->addr_iter_current == state->addr_iter_begin && state->addr_offset_begin == 0) {
+			state->buffer.insert(state->addr_iter_current, line);
 
-		state->addr_iter_current = std::next(state->addr_iter_current);
+			state->addr_iter_current = state->buffer.begin();
+		} else {
+			state->buffer.insert(std::next(state->addr_iter_current), line);
+
+			state->addr_iter_current = std::next(state->addr_iter_current);
+		}
+
+		state->mod_state = CHANGED;
 	}
 
-	state->mod_state = CHANGED;
+	state->addr_offset_current = std::distance(state->buffer.begin(), state->addr_iter_current) + 1;
 
 	return 0;
 }
@@ -383,12 +424,12 @@ int command_append(ed_state *state)
 int command_insert(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_iter_begin = state->addr_iter_current;
+		state->addr_offset_begin = state->addr_offset_current;
 	}
 
-	if (validate_addr(state, 1) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO();
+
+	ed_state_set_addr_iter(state);
 
 	state->addr_iter_current = state->addr_iter_begin;
 
@@ -405,9 +446,11 @@ int command_insert(ed_state *state)
 		state->buffer.insert(state->addr_iter_begin, line);
 
 		state->addr_iter_current = std::prev(state->addr_iter_begin);
+
+		state->mod_state = CHANGED;
 	}
 
-	state->mod_state = CHANGED;
+	state->addr_offset_current = std::distance(state->buffer.begin(), state->addr_iter_current) + 1;
 
 	return 0;
 }
@@ -415,13 +458,13 @@ int command_insert(ed_state *state)
 int command_substitute(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_iter_begin = state->addr_iter_current;
-		state->addr_iter_end = state->addr_iter_current;
+		state->addr_offset_begin = state->addr_offset_current;
+		state->addr_offset_end = state->addr_offset_current;
 	}
 
-	if (validate_addr(state, 2) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+
+	ed_state_set_addr_iter(state);
 
 	std::regex pattern("^/([^/]+)/([^/]+)/");
 	std::smatch matches;
@@ -442,7 +485,7 @@ int command_substitute(ed_state *state)
 		*it = std::regex_replace(*it, regex_search_pattern, rpl);
 	}
 
-	state->addr_iter_current = state->addr_iter_end;
+	state->addr_offset_current = state->addr_offset_end;
 
 	state->mod_state = CHANGED;
 
@@ -452,13 +495,13 @@ int command_substitute(ed_state *state)
 int command_global(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_iter_begin = state->buffer.begin();
-		state->addr_iter_end = std::prev(state->buffer.end());
+		state->addr_offset_begin = 1;
+		state->addr_offset_end = state->addr_offset_max;
 	}
 
-	if (validate_addr(state, 2) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+
+	ed_state_set_addr_iter(state);
 
 	std::regex pattern("^/([^/]+)/?([a-zA-Z])?");
 	std::smatch matches;
@@ -514,7 +557,7 @@ int command_global(ed_state *state)
 		}
 	}
 
-	state->addr_iter_current = state->addr_iter_end;
+	state->addr_offset_current = state->addr_offset_end;
 
 	return 0;
 }
@@ -522,14 +565,12 @@ int command_global(ed_state *state)
 int command_line_number(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_iter_end = std::prev(state->buffer.end());
+		state->addr_offset_end = state->addr_offset_max;
 	}
 
-	if (validate_addr(state, 1) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO();
 
-	std::cout << std::distance(state->buffer.begin(), state->addr_iter_end) + 1 << std::endl;
+	std::cout << state->addr_offset_end << std::endl;
 
 	return 0;
 }
@@ -537,12 +578,12 @@ int command_line_number(ed_state *state)
 int command_mark(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_iter_begin = state->addr_iter_current;
+		state->addr_offset_begin = state->addr_offset_current;
 	}
 
-	if (validate_addr(state, 1) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_NON_ZERO();
+
+	ed_state_set_addr_iter(state);
 
 	int x = (int)state->cmd.at(0);
 
@@ -559,13 +600,13 @@ int command_mark(ed_state *state)
 int command_list(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_iter_begin = state->addr_iter_current;
-		state->addr_iter_end = state->addr_iter_current;
+		state->addr_offset_begin = state->addr_offset_current;
+		state->addr_offset_end = state->addr_offset_current;
 	}
 
-	if (validate_addr(state, 2) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+
+	ed_state_set_addr_iter(state);
 
 	size_t cols = 72;
 	size_t printed = 0;
@@ -614,16 +655,14 @@ int command_list(ed_state *state)
 		printed = 0;
 	}
 
-	state->addr_iter_current = state->addr_iter_end;
+	state->addr_offset_current = state->addr_offset_end;
 
 	return 0;
 }
 
 int command_null(ed_state *state)
 {
-	if (validate_addr(state, 1) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_NON_ZERO();
 
 	return command_print(state);
 }
@@ -708,14 +747,14 @@ void print_usage()
 	std::cerr << "JD297 " << TARGET << " source code <https://github.com/jd297/ed>" << std::endl;
 }
 
-typedef enum {
-	ERROR,
-	NO_MATCH,
-	MATCH
-} AddrPartResult;
+#define INTERPRET_ADDR_PART_OK(offset) (offset) >= 0
+#define INTERPRET_ADDR_PART_ERROR -1
+#define INTERPRET_ADDR_PART_NO_MATCH -2
 
-AddrPartResult interpret_addr_part(ed_state *state, std::list<std::string>::iterator *addr_it, ssize_t line_offset, ssize_t line_max)
+ssize_t interpret_addr_part(ed_state *state)
 {
+	ssize_t addr_offset = state->addr_offset_current;
+
 	std::regex r_pattern("^([\\s]+|[+-]([0-9]+)*|[0-9]+|[$]|[.]|[?]|[/]|'.?)");
 	std::smatch r_match;
 
@@ -726,8 +765,8 @@ AddrPartResult interpret_addr_part(ed_state *state, std::list<std::string>::iter
 
 		#ifdef DEBUG_ADDR
 		std::cout << "===interpret_addr_part DBG:" << std::endl;
-		std::cout << "\tOffset" << line_offset << std::endl;
-		std::cout << "\tMax" << line_max << std::endl;
+		std::cout << "\tOffset" << addr_offset << std::endl;
+		std::cout << "\tMax" << state->addr_offset_max << std::endl;
 		std::cout << "\tMatch found: " << r_match.str() << std::endl;
 		std::cout << "\tLength: " << r_match.length() << std::endl;
 
@@ -747,23 +786,23 @@ AddrPartResult interpret_addr_part(ed_state *state, std::list<std::string>::iter
 			if (!first_run) {
 				state->error = "Invalid address";
 				ed_error(state);
-				return ERROR;
+				return INTERPRET_ADDR_PART_ERROR;
 			}
 
-			line_offset = line_max;
+			addr_offset = state->addr_offset_max;
 		}
 		else if (match.compare(".") == 0) {
 			if (!first_run) {
 				state->error = "Invalid address";
 				ed_error(state);
-				return ERROR;
+				return INTERPRET_ADDR_PART_ERROR;
 			}
 		}
 		else if (match.at(0) == '\'') {
 			if (match.length() == 1) {
 				state->error = "Invalid mark character";
 				ed_error(state);
-				return ERROR;
+				return INTERPRET_ADDR_PART_ERROR;
 			}
 
 			int x = (int)match.at(1);
@@ -771,7 +810,7 @@ AddrPartResult interpret_addr_part(ed_state *state, std::list<std::string>::iter
 			if (islower(x) == 0) {
 				state->error = "Invalid mark character";
 				ed_error(state);
-				return ERROR;
+				return INTERPRET_ADDR_PART_ERROR;
 			}
 
 			auto marked_iter = state->addr_iter_marked[x - 'a'];
@@ -779,10 +818,10 @@ AddrPartResult interpret_addr_part(ed_state *state, std::list<std::string>::iter
 			if (marked_iter == state->buffer.end()) {
 				state->error = "Invalid address";
 				ed_error(state);
-				return ERROR;
+				return INTERPRET_ADDR_PART_ERROR;
 			}
 
-			line_offset = std::distance(state->buffer.begin(), marked_iter) + 1;
+			addr_offset = std::distance(state->buffer.begin(), marked_iter) + 1;
 		}
 		else if (match.compare("/") == 0 || match.compare("?") == 0) {
 			size_t i = 0;
@@ -817,7 +856,7 @@ AddrPartResult interpret_addr_part(ed_state *state, std::list<std::string>::iter
 			if (re.length() == 0) {
 				state->error = "No previous pattern";
 				ed_error(state);
-				return ERROR;
+				return INTERPRET_ADDR_PART_ERROR;
 			}
 
 			std::regex re_pattern(re);
@@ -839,7 +878,7 @@ AddrPartResult interpret_addr_part(ed_state *state, std::list<std::string>::iter
 				}
 
 				if (std::regex_search(*it, re_match, re_pattern)) {
-					line_offset = std::distance(state->buffer.begin(), it) + 1;
+					addr_offset = std::distance(state->buffer.begin(), it) + 1;
 
 					break;
 				}
@@ -851,23 +890,23 @@ AddrPartResult interpret_addr_part(ed_state *state, std::list<std::string>::iter
 			if (it == end) {
 				state->error = "No match";
 				ed_error(state);
-				return ERROR;
+				return INTERPRET_ADDR_PART_ERROR;
 			}
 		}
 		else if (std::all_of(match.begin(), match.end(), ::isdigit)) {
 			long number = std::stol(match);
 
 			if (first_run) {
-				line_offset = number;
+				addr_offset = number;
 			} else {
-				line_offset += number;
+				addr_offset += number;
 			}
 		}
 		else if (match.compare("+") == 0) {
-			line_offset++;
+			addr_offset++;
 		}
 		else if (match.compare("-") == 0) {
-			line_offset--;
+			addr_offset--;
 		}
 		else if (match.length() >= 2) {
 			long number = std::stol(match.substr(1));
@@ -875,27 +914,25 @@ AddrPartResult interpret_addr_part(ed_state *state, std::list<std::string>::iter
 			std::string token = match.substr(0, 1);
 
 			if (token.compare("+") == 0) {
-				line_offset += number;
+				addr_offset += number;
 			}
 			else if (token.compare("-") == 0) {
-				line_offset -= number;
+				addr_offset -= number;
 			}
 		}
 	}
 
 	if (first_run && r_match.length() == 0) {
-		return NO_MATCH;
+		return INTERPRET_ADDR_PART_NO_MATCH;
 	}
 
-	if (line_offset > line_max || line_offset < 1) {
+	if (addr_offset > state->addr_offset_max || addr_offset < 0) {
 		state->error = "Invalid address";
 		ed_error(state);
-		return ERROR;
+		return INTERPRET_ADDR_PART_ERROR;
 	}
 
-	*addr_it = std::next(state->buffer.begin(), line_offset - 1);
-
-	return MATCH;
+	return addr_offset;
 }
 typedef enum {
 	NONE,
@@ -940,79 +977,71 @@ int interpret_addr(ed_state *state)
 {
 	AddrSeperatorResult seperator;
 
-	ssize_t line_offset = std::distance(state->buffer.begin(), state->addr_iter_current) + 1;
-	ssize_t line_max = std::distance(state->addr_iter_current, state->buffer.end()) - 1 + line_offset;
+	state->addr_offset_max = std::distance(state->buffer.begin(), state->buffer.end());
 
 	state->num_addr = 0;
 
-	std::list<std::string>::iterator save_addr = state->buffer.end();
+	ssize_t addr_offset_save = INTERPRET_ADDR_PART_ERROR;
 
 	do {
-		std::list<std::string>::iterator addr;
+		ssize_t addr_offset = interpret_addr_part(state);
 
-		AddrPartResult interpret_result = interpret_addr_part(state, &addr, line_offset, line_max);
-
-		if (interpret_result == ERROR) {
+		if (addr_offset == INTERPRET_ADDR_PART_ERROR) {
 			return -1;
 		}
 
-		if (interpret_result == MATCH) {
+		if (INTERPRET_ADDR_PART_OK(addr_offset)) {
 			if (state->num_addr == 1 || state->num_addr == 0) {
 				state->num_addr++;
-				state->addr_iter_begin = state->addr_iter_end = addr;
+				state->addr_offset_begin = state->addr_offset_end = addr_offset;
 			} else if (state->num_addr == 2) {
 				state->num_addr++;
-				state->addr_iter_end = addr;
+				state->addr_offset_end = addr_offset;
 			} else if (state->num_addr > 2) {
-				state->addr_iter_begin = state->addr_iter_end;
-				state->addr_iter_end = addr;
+				state->addr_offset_begin = state->addr_offset_end;
+				state->addr_offset_end = addr_offset;
 			}
-		} else if (state->num_addr > 0 && save_addr != state->buffer.end()) {
+		} else if (state->num_addr > 0 && addr_offset_save != INTERPRET_ADDR_PART_ERROR) {
 			state->num_addr = 2;
 
-			state->addr_iter_begin = save_addr;
+			state->addr_offset_begin = addr_offset_save;
 		}
 
-		save_addr = state->buffer.end();
+		addr_offset_save = INTERPRET_ADDR_PART_ERROR;
 
 		seperator = interpret_addr_seperator(state);
 
 		if (state->num_addr == 0) {
 			switch (seperator) {
 				case NONE: {
-					state->addr_iter_begin = state->addr_iter_current;
-					state->addr_iter_end = state->addr_iter_current;
-
-					// state->num_addr = 0; // just to be clear
+					state->addr_offset_begin = state->addr_offset_current;
+					state->addr_offset_end = state->addr_offset_current;
 				} break;
 				case COMMA: {
-					state->addr_iter_begin = state->buffer.begin();
-					state->addr_iter_end = std::prev(state->buffer.end());
+					state->addr_offset_begin = 1;
+					state->addr_offset_end = state->addr_offset_max;
 
 					state->num_addr = 2;
 				} break;
 				case SEMICOLON: {
-					state->addr_iter_begin = state->addr_iter_current;
-					state->addr_iter_end = std::prev(state->buffer.end());
+					state->addr_offset_begin = state->addr_offset_current;
+					state->addr_offset_end = state->addr_offset_max;
 
 					state->num_addr = 2;
 				} break;
 			}
-		} else /*if (interpret_result == NO_MATCH)*/ {
+		} else {
 			switch (seperator) {
 				case COMMA: {
-					save_addr = state->addr_iter_end;
+					addr_offset_save = state->addr_offset_end;
 
 					if (state->num_addr < 2) {
 						state->num_addr = 2;
 					}
 				} break;
 				case SEMICOLON: {
-					state->addr_iter_current = state->addr_iter_begin;
-					save_addr = state->addr_iter_end;
-
-					line_offset = std::distance(state->buffer.begin(), state->addr_iter_current) + 1;
-					line_max = std::distance(state->addr_iter_current, state->buffer.end()) - 1 + line_offset;
+					state->addr_offset_current = state->addr_offset_begin;
+					addr_offset_save = state->addr_offset_end;
 
 					if (state->num_addr < 2) {
 						state->num_addr = 2;
@@ -1030,7 +1059,7 @@ int interpret_addr(ed_state *state)
 	return 0;
 }
 
-int validate_addr(ed_state *state, int expected_num_addr)
+int validate_addr(ed_state *state, int expected_num_addr, bool allow_zero_addr)
 {
 	if (expected_num_addr == 0 && state->num_addr != 0) {
 		state->error = "Unexpected address";
@@ -1038,24 +1067,20 @@ int validate_addr(ed_state *state, int expected_num_addr)
 	}
 
 	if (expected_num_addr == 1) {
-		state->addr_iter_begin = state->addr_iter_end;
+		state->addr_offset_begin = state->addr_offset_end;
+	}
+
+	if (expected_num_addr > 0 && allow_zero_addr == false && (state->addr_offset_begin == 0 || state->addr_offset_end == 0)) {
+		state->error = "Invalid address";
+		return -1;
 	}
 
 	if (
-		(state->addr_iter_begin == state->buffer.end() && !state->buffer.empty())
+		(state->addr_offset_begin > state->addr_offset_max)
 			||
-		(state->addr_iter_end == state->buffer.end() && !state->buffer.empty())
+		(state->addr_offset_end > state->addr_offset_max)
 			||
-		(
-			expected_num_addr == 2 && state->num_addr == 2
-				&&
-			(
-				std::distance(state->buffer.begin(), state->addr_iter_end)
-					<
-				std::distance(state->buffer.begin(), state->addr_iter_begin)
-			)
-		)
-
+		(state->addr_offset_begin > state->addr_offset_end)
 	) {
 		state->error = "Invalid address";
 		return -1;
