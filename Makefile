@@ -1,43 +1,30 @@
+.POSIX:
+
+CC            = c++
+CFLAGS        = -Wall -Wextra -Wpedantic -g -DTARGET=\"$(TARGET)\"
+LDFLAGS       = 
+
+TARGET        = ed++
 PREFIX        = /usr/local
 BINDIR        = $(PREFIX)/bin
 MANDIR        = $(PREFIX)/share/man
-
-TARGET        = ed++
-TARGETDIR     = bin
-BUILDDIR      = build
 SRCDIR        = src
-SRCINCLUDEDIR = include
-TESTDIR       = tests
+BUILDDIR      = build
 
-SRCFILEEXT    = cpp
-SRCFILES      = $(wildcard $(SRCDIR)/*.$(SRCFILEEXT))
-OBJFILEEXT    = o
-OBJFILES      = $(patsubst $(SRCDIR)/%.$(SRCFILEEXT),$(BUILDDIR)/%.$(OBJFILEEXT),$(SRCFILES))
+$(BUILDDIR)/$(TARGET): $(BUILDDIR)/ed++.o
+	$(CC) $(CFLAGS) $(BUILDDIR)/ed++.o -o $@ $(LDFLAGS)
 
-
-CC            = c++
-CCLIBS        = -static
-CCFLAGS       = -Wall -Wextra -Wpedantic -g
-CCINCLUDE     = -I $(SRCINCLUDEDIR)
-CCFLAGSPROG   = -DTARGET=\"$(TARGET)\"
-CCFLAGSEXTRA  =
-
-$(TARGETDIR)/$(TARGET): $(OBJFILES)
-	$(CC) $(CCFLAGS) $(CCINCLUDE) $(OBJFILES) -o $(TARGETDIR)/$(TARGET) $(CCLIBS)
-
-$(BUILDDIR)/%.$(OBJFILEEXT): $(SRCDIR)/%.$(SRCFILEEXT)
-	$(CC) $(CCFLAGS) $(CCINCLUDE) $(CCFLAGSPROG) $(CCFLAGSEXTRA) -c -o $@ $<
+$(BUILDDIR)/ed++.o: $(SRCDIR)/ed++.cpp
+	$(CC) $(CFLAGS) -c $(SRCDIR)/ed++.cpp -o $@
 
 clean:
-	rm -f $(BUILDDIR)/*.$(OBJFILEEXT) $(TARGETDIR)/$(TARGET)
+	rm -f $(BUILDDIR)/*
 
 install: $(TARGET)
-	cp $(TARGETDIR)/$(TARGET) $(BINDIR)/$(TARGET)
+	cp $(BUILDDIR)/$(TARGET) $(BINDIR)/$(TARGET)
 
 uninstall:
 	rm -f $(BINDIR)/$(TARGET)
 
-.PHONY: tests-always-fail
-
-tests: $(TARGETDIR)/$(TARGET) tests-always-fail
-	TARGET=$(TARGETDIR)/$(TARGET) testsh --test
+tests: $(BUILDDIR)/$(TARGET)
+	TARGET=$(BUILDDIR)/$(TARGET) testsh --test
