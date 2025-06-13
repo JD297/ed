@@ -38,7 +38,13 @@ typedef struct ed_state {
 	bool error_print;
 	std::string error;
 
-	std::string cmd;
+	std::string input;
+
+	char cmd;
+
+	std::smatch params;
+
+	char suffix;
 
 	ModState mod_state;
 
@@ -49,7 +55,7 @@ typedef struct ed_state {
 	std::string last_re;
 } ed_state;
 
-extern int run_command(ed_state *state, std::string command);
+extern int run_command(ed_state *state);
 
 extern int validate_addr(ed_state *state, int expected_num_addr, bool allow_zero_addr);
 
@@ -94,7 +100,7 @@ void ed_state_init(ed_state *state)
 
 	state->filename = "";
 
-	state->cmd = "";
+	state->input = "";
 
 	state->buffer = std::list<std::string>();
 
@@ -138,7 +144,7 @@ void ed_print_error(ed_state *state)
 	}
 }
 
-int command_print_error(ed_state *state)
+int command_help(ed_state *state)
 {
 	VALIDATE_ADDR_EXPECT_NO_ADDR();
 
@@ -156,12 +162,12 @@ void ed_error(ed_state *state)
 	}
 }
 
-int command_toggle_print_error(ed_state *state)
+int command_help_mode(ed_state *state)
 {
 	VALIDATE_ADDR_EXPECT_NO_ADDR();
 
 	if ((state->error_print = !state->error_print)) {
-		return command_print_error(state);
+		return command_help(state);
 	}
 
 	return 0;
@@ -188,13 +194,8 @@ int command_file(ed_state *state)
 {
 	VALIDATE_ADDR_EXPECT_NO_ADDR();
 
-	std::regex pattern("^\\s\\s*(.*)");
-	std::smatch matches;
-
-	std::regex_search(state->cmd, matches, pattern);
-
-	if (matches.size() > 1) {
-		state->filename = matches[1];
+	if (state->params.size() > 1) {
+		state->filename = state->params[1];
 	}
 
 	if (state->filename.empty()) {
@@ -220,13 +221,8 @@ int command_edit(ed_state *state)
 		return -1;
 	}
 
-	std::regex pattern("^\\s\\s*(.*)");
-	std::smatch matches;
-
-	std::regex_search(state->cmd, matches, pattern);
-
-	if (matches.size() > 1) {
-		state->filename = matches[1];
+	if (state->params.size() > 1) {
+		state->filename = state->params[1];
 	}
 
 	if (state->filename.empty()) {
@@ -466,17 +462,12 @@ int command_substitute(ed_state *state)
 
 	ed_state_set_addr_iter(state);
 
-	std::regex pattern("^/([^/]+)/([^/]+)/");
-	std::smatch matches;
-
-	std::regex_search(state->cmd, matches, pattern);
-
-	if (matches.size() < 2) {
+	if (state->params.size() < 2) {
 		return -1;
 	}
 
-	std::string rsp = matches[1];
-	std::string rpl = matches[2];
+	std::string rsp = state->params[1];
+	std::string rpl = state->params[2];
 	std::regex regex_search_pattern(rsp);
 
 	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
@@ -503,24 +494,16 @@ int command_global(ed_state *state)
 
 	ed_state_set_addr_iter(state);
 
-	std::regex pattern("^/([^/]+)/?([a-zA-Z])?");
-	std::smatch matches;
-
-	std::regex_search(state->cmd, matches, pattern);
-
 	std::string global_command = "p";
-
-	//for (size_t i = 0; i < matches.size(); i++)
-	//	std::cout << "match[" << i << "]: \"" << matches[i] << "\"" << std::endl;
 
 	// TODO if RE  is empty then use last RE
 	// if no pattern then error "No previous pattern"
 
-	if (matches.size() == 0) {
+	if (state->params.size() == 0) {
 		state->error = "Invalid pattern delimiter";
 		return -1;
-	} else if (matches.size() == 3 && matches[2] != "") {
-		global_command = matches[2];
+	} else if (state->params.size() == 3 && state->params[2] != "") {
+		global_command = state->params[2];
 	}
 
 	std::regex except_commands("[gGvV]");
@@ -531,7 +514,7 @@ int command_global(ed_state *state)
 		return -1;
 	}
 
-	std::string search_pattern = matches[1];
+	std::string search_pattern = state->params[1];
 	std::regex regex_search_pattern(search_pattern);
 	std::smatch match;
 
@@ -551,7 +534,7 @@ int command_global(ed_state *state)
 		state->addr_iter_begin = *it;
 		state->addr_iter_end = *it;
 
-		if (run_command(state, global_command) != 0) {
+		if (run_command(state/*, global_command TODO change state cmd to global cmd!!!!!!!!!!!!!*/) != 0) {
 			// ed_error(state); // TODO remove
 			break;
 		}
@@ -585,7 +568,7 @@ int command_mark(ed_state *state)
 
 	ed_state_set_addr_iter(state);
 
-	int x = (int)state->cmd.at(0);
+	int x = (int)state->input.at(0);
 
 	if (islower(x) == 0) {
 		state->error = "Invalid mark character";
@@ -667,75 +650,66 @@ int command_null(ed_state *state)
 	return command_print(state);
 }
 
-int run_command(ed_state *state, std::string command)
+int run_command(ed_state *state)
 {
-	if (command.compare("q") == 0) {
-		return command_quit(state);
-	}
-	else if (command.compare("l") == 0) {
-		return command_list(state);
-	}
-	else if (command.compare("k") == 0) {
-		return command_mark(state);
-	}
-	else if (command.compare("=") == 0) {
-		return command_line_number(state);
-	}
-	else if (command.compare("Q") == 0) {
-		state->mod_state = CHANGED_AND_WARNED;
+	switch (state->cmd) {
+		case 'a': return command_append(state);
 
-		return command_quit(state);
-	}
-	else if (command.compare("e") == 0) {
-		return command_edit(state);
-	}
-	else if (command.compare("E") == 0) {
-		state->mod_state = CHANGED_AND_WARNED;
+		// TODO case 'c': return command_change(state);
 
-		return command_edit(state);
-	}
-	else if (command.compare("f") == 0) {
-		return command_file(state);
-	}
-	else if (command.compare("p") == 0) {
-		return command_print(state);
-	}
-	else if (command.compare("n") == 0) {
-		return command_number(state);
-	}
-	else if (command.compare("d") == 0) {
-		return command_delete(state);
-	}
-	else if (command.compare("P") == 0) {
-		return command_prompt(state);
-	}
-	else if (command.compare("h") == 0) {
-		return command_print_error(state);
-	}
-	else if (command.compare("H") == 0) {
-		return command_toggle_print_error(state);
-	}
-	else if (command.compare("w") == 0) {
-		return command_write(state);
-	}
-	else if (command.compare("a") == 0) {
-		return command_append(state);
-	}
-	else if (command.compare("i") == 0) {
-		return command_insert(state);
-	}
-	else if (command.compare("s") == 0) {
-		return command_substitute(state);
-	}
-	else if (command.compare("g") == 0) {
-		return command_global(state);
-	}
-	else if (command.empty()) {
-		return command_null(state);
-	}
-	else {
-		state->error = "Unknown command";
-		return -1;
+		case 'd': return command_delete(state);
+
+		case 'E': state->mod_state = CHANGED_AND_WARNED; [[fallthrough]];
+		case 'e': return command_edit(state);
+
+		case 'f': return command_file(state);
+
+		// TODO case 'G': state->interactive = true; [[fallthrough]];
+		case 'g': return command_global(state);
+
+		case 'h': return command_help(state);
+
+		case 'H': return command_help_mode(state);
+
+		case 'i': return command_insert(state);
+
+		// TODO case 'j': return command_join(state);
+
+		case 'k': return command_mark(state);
+
+		case 'l': return command_list(state);
+
+		// TODO case 'm': return command_move(state);
+
+		case 'n': return command_number(state);
+
+		case 'p': return command_print(state);
+
+		case 'P': return command_prompt(state);
+
+		case 'Q': state->mod_state = CHANGED_AND_WARNED; [[fallthrough]];
+		case 'q': return command_quit(state);
+
+		// TODO case 'r': return command_read(state);
+
+		case 's': return command_substitute(state);
+
+		// TODO case 't': return command_copy(state);
+
+		// TODO case 'u': return command_undo(state);
+
+		// TODO case 'V': state->interactive = true; [[fallthrough]];
+		// TODO case 'v': state->non_matched = true; return command_global(state);
+
+		case 'w': return command_write(state);
+
+		case '=': return command_line_number(state);
+
+		// TODO case '!': return command_shell_escape(state);
+
+		case '\0': return command_null(state);
+
+		default: state->error = "Command not implemented (" + std::string(1, state->cmd) + ")"; return -1;
 	}
 }
 
@@ -760,7 +734,7 @@ ssize_t interpret_addr_part(ed_state *state)
 
 	bool first_run;
 
-	for(first_run = true; std::regex_search(state->cmd, r_match, r_pattern); first_run = false) {
+	for(first_run = true; std::regex_search(state->input, r_match, r_pattern); first_run = false) {
 		state->has_cmd_addr = true;
 
 		#ifdef DEBUG_ADDR
@@ -776,16 +750,17 @@ ssize_t interpret_addr_part(ed_state *state)
 		#endif
 
 		std::string match = r_match.str();
-		state->cmd = state->cmd.substr(match.length());
+		state->input = state->input.substr(match.length());
 
 		#ifdef DEBUG_ADDR
-		std::cout << "\tCMD (SUBSTR): \"" << state->cmd << "\"" << std::endl;
+		std::cout << "\tCMD (SUBSTR): \"" << state->input << "\"" << std::endl;
 		#endif
 
+		// TODO switch case ??
 		if (match.compare("$") == 0) {
 			if (!first_run) {
 				state->error = "Invalid address";
-				ed_error(state);
+
 				return INTERPRET_ADDR_PART_ERROR;
 			}
 
@@ -794,14 +769,14 @@ ssize_t interpret_addr_part(ed_state *state)
 		else if (match.compare(".") == 0) {
 			if (!first_run) {
 				state->error = "Invalid address";
-				ed_error(state);
+
 				return INTERPRET_ADDR_PART_ERROR;
 			}
 		}
 		else if (match.at(0) == '\'') {
 			if (match.length() == 1) {
 				state->error = "Invalid mark character";
-				ed_error(state);
+
 				return INTERPRET_ADDR_PART_ERROR;
 			}
 
@@ -809,7 +784,7 @@ ssize_t interpret_addr_part(ed_state *state)
 
 			if (islower(x) == 0) {
 				state->error = "Invalid mark character";
-				ed_error(state);
+
 				return INTERPRET_ADDR_PART_ERROR;
 			}
 
@@ -817,7 +792,7 @@ ssize_t interpret_addr_part(ed_state *state)
 
 			if (marked_iter == state->buffer.end()) {
 				state->error = "Invalid address";
-				ed_error(state);
+
 				return INTERPRET_ADDR_PART_ERROR;
 			}
 
@@ -828,9 +803,9 @@ ssize_t interpret_addr_part(ed_state *state)
 			size_t ends = 0;
 
 			// TODO regex
-			while (i < state->cmd.length()) {
-				if (state->cmd.at(i) == match.at(0)) {
-					if (i >= 1 && state->cmd.at(i-1) == '\\') {
+			while (i < state->input.length()) {
+				if (state->input.at(i) == match.at(0)) {
+					if (i >= 1 && state->input.at(i-1) == '\\') {
 						i++;
 						continue;
 					}
@@ -848,14 +823,14 @@ ssize_t interpret_addr_part(ed_state *state)
 			if (i == 0) {
 				re = state->last_re;
 			} else {
-				re = state->cmd.substr(0, i);
+				re = state->input.substr(0, i);
 				state->last_re = re;
-				state->cmd = state->cmd.substr(i + ends);
+				state->input = state->input.substr(i + ends);
 			}
 
 			if (re.length() == 0) {
 				state->error = "No previous pattern";
-				ed_error(state);
+
 				return INTERPRET_ADDR_PART_ERROR;
 			}
 
@@ -889,7 +864,7 @@ ssize_t interpret_addr_part(ed_state *state)
 
 			if (it == end) {
 				state->error = "No match";
-				ed_error(state);
+
 				return INTERPRET_ADDR_PART_ERROR;
 			}
 		}
@@ -928,7 +903,7 @@ ssize_t interpret_addr_part(ed_state *state)
 
 	if (addr_offset > state->addr_offset_max || addr_offset < 0) {
 		state->error = "Invalid address";
-		ed_error(state);
+
 		return INTERPRET_ADDR_PART_ERROR;
 	}
 
@@ -951,7 +926,7 @@ AddrSeperatorResult interpret_addr_seperator(ed_state *state)
 	std::cout << "===SEPERATOR DBG:" << std::endl;
 	#endif
 
-	if (std::regex_search(state->cmd, match, pattern)) {
+	if (std::regex_search(state->input, match, pattern)) {
 		#ifdef DEBUG_ADDR
 		std::cout << "\tMatch found (match): " << match.str() << std::endl;
 		#endif
@@ -962,7 +937,7 @@ AddrSeperatorResult interpret_addr_seperator(ed_state *state)
 			seperator = SEMICOLON;
 		}
 
-		state->cmd = state->cmd.substr(match.str().length());
+		state->input = state->input.substr(match.str().length());
 		state->has_cmd_addr = true;
 	} else {
 		#ifdef DEBUG_ADDR
@@ -1089,34 +1064,78 @@ int validate_addr(ed_state *state, int expected_num_addr, bool allow_zero_addr)
 	return 0;
 }
 
-std::string interpret_cmd(ed_state *state)
+int interpret_cmd(ed_state *state)
 {
-	std::regex command_pattern("^([a-zA-Z=])(.*+)");
-	std::smatch command_match;
-	std::string match = "";
+	state->cmd = '\0';
+	state->params = std::smatch();
+	state->suffix = '\0';
 
-	#ifdef DEBUG_CMD
-	std::cout << "===COMMAND DBG:" << std::endl;
-	#endif
-
-	if (std::regex_search(state->cmd, command_match, command_pattern)) {
-		match = command_match[1];
-
-		#ifdef DEBUG_CMD
-		std::cout << "\tMatch found: " << command_match.str() << std::endl;
-		std::cout << "\tLength: " << command_match.length() << std::endl;
-		for (long int i = 0; i < command_match.length(); i++)
-			std::cout << "\tmatch[" << i << "]:" << command_match[i] << std::endl;
-		#endif
-
-		state->cmd = state->cmd.substr(match.length());
-	} else {
-		#ifdef DEBUG_CMD
-		std::cout << "\tNo match found (command)." << std::endl;
-		#endif
+	if (state->input.length() == 0) {
+		return 0;
 	}
 
-	return match;
+	std::smatch cmd_match;
+
+	if (!std::regex_search(state->input, cmd_match, std::regex("^\\s*([acdEefGghHijklmnpPQqrstuVvw=!]|$)"))) {
+		state->error = "Unknown command";
+		return -1;
+	} else if (cmd_match[1].str().length() == 0) {
+		return 0;
+	}
+
+	state->cmd = cmd_match[1].str().at(0);
+
+	state->input = state->input.substr(cmd_match.length());
+
+	switch (state->cmd) {
+		case 'e': case 'E': case 'f': {
+			std::regex_search(state->input, state->params, std::regex("^\\s\\s*(.*)"));
+		} break;
+		case 'g': case 'G': case 'v': case 'V': {
+			std::regex_search(state->input, state->params, std::regex("^/([^/]+)/?([a-zA-Z])?"));
+		} break;
+		case 's': {
+			std::regex_search(state->input, state->params, std::regex("^/([^/]+)/([^/]+)/"));
+		} break;
+		default: break;
+	}
+
+	std::string suffix_part = std::string(state->input);
+
+	if (state->params.size() > 0) {
+		 suffix_part = suffix_part.substr(state->params.length());
+	}
+
+	if (suffix_part.length() == 0) {
+		return 0;
+	}
+
+	std::smatch suffix_match;
+
+	std::regex_search(suffix_part, suffix_match, std::regex("^([lnp]|$)*"));
+
+	switch (state->cmd) {
+		case 'e': case 'E': case 'f': case 'q':
+		case 'Q': case 'w': case '!': {
+			if (suffix_match.length() != 0) {
+				state->error = "Unexpected command suffix";
+				return -1;
+			}
+		} break;
+		default: {
+			if (suffix_match.size() == 0) {
+				state->error = "Invalid command suffix";
+				return -1;
+			} else if (suffix_part.length() != suffix_match.str().length()) {
+				state->error = "Invalid command suffix";
+				return -1;
+			}
+
+			state->suffix = suffix_match[0].str().at(0);
+		} break;
+	}
+
+	return 0;
 }
 
 int main(int argc, char **argv)
@@ -1152,15 +1171,15 @@ int main(int argc, char **argv)
 	do {
 		state.has_cmd_addr = false;
 
-		state.cmd = "";
+		state.input = "";
 
 		if (state.prompt_print) {
 			std::cout << state.promt << std::flush;
 		}
 
 		while (int ch = getchar()) {
-			if (state.cmd.length() == 0 && ch == '\n') {
-				state.cmd = "+1p";
+			if (state.input.length() == 0 && ch == '\n') {
+				state.input = "+1p";
 				break;
 			}
 
@@ -1168,19 +1187,38 @@ int main(int argc, char **argv)
 				break;
 			}
 
-			state.cmd += ch;
+			state.input += ch;
 		}
 
-		if (state.cmd.length() == 0) {
-			state.cmd = "q";
+		if (state.input.length() == 0) {
+			state.input = "q";
 		}
 
-		if (interpret_addr(&state) == -1) {
+		if (interpret_addr(&state) != 0) {
+			ed_error(&state);
+
 			continue;
 		}
 
-		if (run_command(&state, interpret_cmd(&state)) != 0) {
+		if (interpret_cmd(&state) != 0) {
 			ed_error(&state);
+
+			continue;
+		}
+
+		if (run_command(&state) != 0) {
+			ed_error(&state);
+
+			continue;
+		}
+
+		state.cmd = state.suffix;
+		state.addr_offset_begin = state.addr_offset_end = state.addr_offset_current;
+
+		if (state.suffix != '\0' && run_command(&state) != 0) {
+			ed_error(&state);
+
+			continue;
 		}
 	} while (state.runs);
 
