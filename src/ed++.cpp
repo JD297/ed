@@ -1212,10 +1212,13 @@ int main(int argc, char **argv)
 			continue;
 		}
 
-		state.cmd = state.suffix;
+		if ((state.cmd = state.suffix) == '\0') {
+			continue;
+		}
+
 		state.addr_offset_begin = state.addr_offset_end = state.addr_offset_current;
 
-		if (state.suffix != '\0' && run_command(&state) != 0) {
+		if (run_command(&state) != 0) {
 			ed_error(&state);
 
 			continue;
