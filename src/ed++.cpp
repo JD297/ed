@@ -737,24 +737,8 @@ ssize_t interpret_addr_part(ed_state *state)
 	for(first_run = true; std::regex_search(state->input, r_match, r_pattern); first_run = false) {
 		state->has_cmd_addr = true;
 
-		#ifdef DEBUG_ADDR
-		std::cout << "===interpret_addr_part DBG:" << std::endl;
-		std::cout << "\tOffset" << addr_offset << std::endl;
-		std::cout << "\tMax" << state->addr_offset_max << std::endl;
-		std::cout << "\tMatch found: " << r_match.str() << std::endl;
-		std::cout << "\tLength: " << r_match.length() << std::endl;
-
-		/*for (ssize_t i = 0; i < r_match.length(); i++) {
-			std::cout << "\tmatch[" << i << "]:" << r_match[i] << std::endl;
-		}*/
-		#endif
-
 		std::string match = r_match.str();
 		state->input = state->input.substr(match.length());
-
-		#ifdef DEBUG_ADDR
-		std::cout << "\tCMD (SUBSTR): \"" << state->input << "\"" << std::endl;
-		#endif
 
 		// TODO switch case ??
 		if (match.compare("$") == 0) {
@@ -922,15 +906,7 @@ AddrSeperatorResult interpret_addr_seperator(ed_state *state)
 
 	AddrSeperatorResult seperator = NONE;
 
-	#ifdef DEBUG_ADDR
-	std::cout << "===SEPERATOR DBG:" << std::endl;
-	#endif
-
 	if (std::regex_search(state->input, match, pattern)) {
-		#ifdef DEBUG_ADDR
-		std::cout << "\tMatch found (match): " << match.str() << std::endl;
-		#endif
-
 		if (match.str().compare(",") == 0) {
 			seperator = COMMA;
 		} else if (match.str().compare(";") == 0) {
@@ -939,10 +915,6 @@ AddrSeperatorResult interpret_addr_seperator(ed_state *state)
 
 		state->input = state->input.substr(match.str().length());
 		state->has_cmd_addr = true;
-	} else {
-		#ifdef DEBUG_ADDR
-		std::cout << "\tNo match found (seperator)." << std::endl;
-		#endif
 	}
 
 	return seperator;
