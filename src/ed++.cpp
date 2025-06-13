@@ -506,6 +506,8 @@ int command_global(ed_state *state)
 		global_command = state->params[2];
 	}
 
+	state->cmd = global_command.at(0);
+
 	std::regex except_commands("[gGvV]");
 	std::smatch except_match;
 
@@ -531,16 +533,13 @@ int command_global(ed_state *state)
 	}
 
 	for (auto it = marked_lines.begin(); it != marked_lines.end(); it++) {
-		state->addr_iter_begin = *it;
-		state->addr_iter_end = *it;
+		state->has_cmd_addr = false;
+		state->addr_offset_current = std::distance(state->buffer.begin(), *it) + 1;
 
-		if (run_command(state/*, global_command TODO change state cmd to global cmd!!!!!!!!!!!!!*/) != 0) {
-			// ed_error(state); // TODO remove
-			break;
+		if (run_command(state) != 0) {
+			return -1;
 		}
 	}
-
-	state->addr_offset_current = state->addr_offset_end;
 
 	return 0;
 }
@@ -1188,7 +1187,7 @@ int main(int argc, char **argv)
 			continue;
 		}
 
-		state.addr_offset_begin = state.addr_offset_end = state.addr_offset_current;
+		state.has_cmd_addr = false; // fallback is addr_offset_current
 
 		if (run_command(&state) != 0) {
 			ed_error(&state);
