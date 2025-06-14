@@ -587,7 +587,12 @@ int command_mark(ed_state *state)
 
 	ed_state_set_addr_iter(state);
 
-	int x = (int)state->input.at(0);
+	if (state->params.size() == 0) {
+		state->error = "Expected mark character";
+		return -1;
+	}
+
+	int x = (int)state->params.str().at(0);
 
 	if (islower(x) == 0) {
 		state->error = "Invalid mark character";
@@ -1087,6 +1092,9 @@ int interpret_cmd(ed_state *state)
 		} break;
 		case 's': {
 			std::regex_search(state->input, state->params, std::regex("^/([^/]*)/([^/]*)/?"));
+		} break;
+		case 'k': {
+			std::regex_search(state->input, state->params, std::regex("^."));
 		} break;
 		default: break;
 	}
