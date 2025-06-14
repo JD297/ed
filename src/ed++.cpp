@@ -466,9 +466,21 @@ int command_substitute(ed_state *state)
 		return -1;
 	}
 
-	std::string rsp = state->params[1];
+	std::string search_pattern = state->last_re;
+
+	if (state->params[1].length() > 0) {
+		search_pattern = state->params[1];
+		state->last_re = search_pattern;
+	}
+
+	if (search_pattern.length() == 0) {
+		state->error = "No previous pattern";
+		return -1;
+	}
+
+	std::regex regex_search_pattern(search_pattern);
+
 	std::string rpl = state->params[2];
-	std::regex regex_search_pattern(rsp);
 
 	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
 		invalid_marked_addr_iter(state, it); // TODO only when a match happend
@@ -496,9 +508,6 @@ int command_global(ed_state *state)
 
 	std::string global_command = "p";
 
-	// TODO if RE  is empty then use last RE
-	// if no pattern then error "No previous pattern"
-
 	if (state->params.size() == 0) {
 		state->error = "Invalid pattern delimiter";
 		return -1;
@@ -516,7 +525,18 @@ int command_global(ed_state *state)
 		return -1;
 	}
 
-	std::string search_pattern = state->params[1];
+	std::string search_pattern = state->last_re;
+
+	if (state->params[1].length() > 0) {
+		search_pattern = state->params[1];
+		state->last_re = search_pattern;
+	}
+
+	if (search_pattern.length() == 0) {
+		state->error = "No previous pattern";
+		return -1;
+	}
+
 	std::regex regex_search_pattern(search_pattern);
 	std::smatch match;
 
@@ -1063,10 +1083,10 @@ int interpret_cmd(ed_state *state)
 			std::regex_search(state->input, state->params, std::regex("^\\s\\s*(.*)"));
 		} break;
 		case 'g': case 'G': case 'v': case 'V': {
-			std::regex_search(state->input, state->params, std::regex("^/([^/]+)/?([a-zA-Z])?"));
+			std::regex_search(state->input, state->params, std::regex("^/([^/]*)/?([a-zA-Z])?"));
 		} break;
 		case 's': {
-			std::regex_search(state->input, state->params, std::regex("^/([^/]+)/([^/]+)/"));
+			std::regex_search(state->input, state->params, std::regex("^/([^/]*)/([^/]*)/?"));
 		} break;
 		default: break;
 	}
