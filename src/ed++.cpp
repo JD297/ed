@@ -57,6 +57,8 @@ typedef struct ed_state {
 
 extern int run_command(ed_state *state);
 
+extern int interpret_addr(ed_state *state);
+
 extern int validate_addr(ed_state *state, int expected_num_addr, bool allow_zero_addr);
 
 #define VALIDATE_ADDR_EXPECT_NO_ADDR()\
@@ -667,6 +669,64 @@ int command_list(ed_state *state)
 	return 0;
 }
 
+int command_move(ed_state *state)
+{
+	if (!state->has_cmd_addr) {
+		state->addr_offset_begin = state->addr_offset_current;
+		state->addr_offset_end = state->addr_offset_current;
+	}
+
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+
+	ed_state_set_addr_iter(state);
+
+	ed_state move_state = *state;
+	move_state.input = state->params.str();
+
+	if (interpret_addr(&move_state) != 0) {
+		return -1;
+	}
+
+	if (!move_state.has_cmd_addr) {
+		move_state.addr_offset_begin = move_state.addr_offset_current;
+		move_state.addr_offset_end = move_state.addr_offset_current;
+	}
+
+	if (validate_addr(&move_state, 1, true) != 0) {
+		return -1;
+	}
+
+	if (
+		move_state.addr_offset_end >= state->addr_offset_begin
+			&&
+		move_state.addr_offset_end <= state->addr_offset_end
+	) {
+		state->error = "Invalid destination";
+		return -1;
+	}
+
+	auto addr_dst_iter = std::next(state->buffer.begin(), move_state.addr_offset_end);
+
+	state->buffer.splice(addr_dst_iter,
+						 state->buffer,
+						 state->addr_iter_begin,
+						 std::next(state->addr_iter_end));
+
+	state->mod_state = CHANGED;
+
+	ssize_t moved_lines = 1 + move_state.addr_offset_end - move_state.addr_offset_begin;
+
+	ssize_t move_offset = move_state.addr_offset_end;
+
+	if (move_offset > 0) {
+		--move_offset;
+	}
+
+	state->addr_offset_current = move_offset + moved_lines;
+
+	return 0;
+}
+
 int command_null(ed_state *state)
 {
 	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_NON_ZERO();
@@ -703,7 +763,7 @@ int run_command(ed_state *state)
 
 		case 'l': return command_list(state);
 
-		// TODO case 'm': return command_move(state);
+		case 'm': return command_move(state);
 
 		case 'n': return command_number(state);
 
@@ -1095,6 +1155,10 @@ int interpret_cmd(ed_state *state)
 		} break;
 		case 'k': {
 			std::regex_search(state->input, state->params, std::regex("^."));
+		} break;
+		case 'm': case 't': {
+			std::regex_search(state->input, state->params, 
+			std::regex("^([\\s]+|[+-]([0-9]+)*|[0-9]+|[$]|[.]|[?]|[/]|'.?|[,;])*"));
 		} break;
 		default: break;
 	}
