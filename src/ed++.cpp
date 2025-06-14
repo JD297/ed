@@ -782,6 +782,37 @@ int command_copy(ed_state *state)
 	return 0;
 }
 
+int command_join(ed_state *state)
+{
+	if (!state->has_cmd_addr) {
+		state->addr_offset_begin = state->addr_offset_current;
+		state->addr_offset_end = state->addr_offset_current + 1;
+	}
+
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+
+	ed_state_set_addr_iter(state);
+
+	if (state->addr_offset_begin == state->addr_offset_end) {
+		return 0;
+	}
+
+	auto end = std::next(state->addr_iter_end);
+
+	for (auto it = std::next(state->addr_iter_begin); it != end; ) {
+		state->addr_iter_begin->append(*it);
+		invalid_marked_addr_iter(state, it);
+
+		it = state->buffer.erase(it);
+	}
+
+	state->mod_state = CHANGED;
+
+	state->addr_offset_current = state->addr_offset_begin;
+
+	return 0;
+}
+
 int command_null(ed_state *state)
 {
 	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_NON_ZERO();
@@ -812,7 +843,7 @@ int run_command(ed_state *state)
 
 		case 'i': return command_insert(state);
 
-		// TODO case 'j': return command_join(state);
+		case 'j': return command_join(state);
 
 		case 'k': return command_mark(state);
 
