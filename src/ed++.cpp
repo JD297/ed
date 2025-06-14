@@ -727,6 +727,61 @@ int command_move(ed_state *state)
 	return 0;
 }
 
+int command_copy(ed_state *state)
+{
+	if (!state->has_cmd_addr) {
+		state->addr_offset_begin = state->addr_offset_current;
+		state->addr_offset_end = state->addr_offset_current;
+	}
+
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+
+	ed_state_set_addr_iter(state);
+
+	ed_state copy_state = *state;
+	copy_state.input = state->params.str();
+
+	if (interpret_addr(&copy_state) != 0) {
+		return -1;
+	}
+
+	if (!copy_state.has_cmd_addr) {
+		copy_state.addr_offset_begin = copy_state.addr_offset_current;
+		copy_state.addr_offset_end = copy_state.addr_offset_current;
+	}
+
+	if (validate_addr(&copy_state, 1, true) != 0) {
+		return -1;
+	}
+
+	if (
+		copy_state.addr_offset_end >= state->addr_offset_begin
+			&&
+		copy_state.addr_offset_end <= state->addr_offset_end
+	) {
+		state->error = "Invalid destination";
+		return -1;
+	}
+
+	auto addr_dst_iter = std::next(state->buffer.begin(), copy_state.addr_offset_end);
+
+	state->buffer.insert(addr_dst_iter, state->addr_iter_begin, std::next(state->addr_iter_end));
+
+	state->mod_state = CHANGED;
+
+	ssize_t copied_lines = 1 + copy_state.addr_offset_end - copy_state.addr_offset_begin;
+
+	ssize_t copy_offset = copy_state.addr_offset_end;
+
+	if (copy_offset > 0) {
+		--copy_offset;
+	}
+
+	state->addr_offset_current = copy_offset + copied_lines;
+
+	return 0;
+}
+
 int command_null(ed_state *state)
 {
 	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_NON_ZERO();
@@ -778,7 +833,7 @@ int run_command(ed_state *state)
 
 		case 's': return command_substitute(state);
 
-		// TODO case 't': return command_copy(state);
+		case 't': return command_copy(state);
 
 		// TODO case 'u': return command_undo(state);
 
