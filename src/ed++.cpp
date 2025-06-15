@@ -17,10 +17,10 @@ typedef enum {
 
 typedef struct ed_state {
 	std::list<std::string> buffer;
-	std::list<std::string>::iterator addr_iter_current;
+	std::list<std::string>::iterator addr_iter_cur;
 	std::list<std::string>::iterator addr_iter_begin;
 	std::list<std::string>::iterator addr_iter_end;
-	ssize_t addr_offset_current;
+	ssize_t addr_offset_cur;
 	ssize_t addr_offset_begin;
 	ssize_t addr_offset_end;
 	ssize_t addr_offset_max;
@@ -55,11 +55,22 @@ typedef struct ed_state {
 	std::string last_re;
 } ed_state;
 
+#define REGEX_ADDR "^([\\s]+|[+-]([0-9]+)*|[0-9]+|[$]|[.]|[?]|[/]|'.?|[,;])*"
+#define REGEX_ADDR_PART "^([\\s]+|[+-]([0-9]+)*|[0-9]+|[$]|[.]|[?]|[/]|'.?)"
+#define REGEX_ADDR_SEPERATOR "^[,;]"
+#define REGEX_CMD "^\\s*([acdEefGghHijklmnpPQqrstuVvw=!]|$)"
+#define REGEX_PARAM_SUBSTITUTE "^/([^/]*)/([^/]*)/?"
+#define REGEX_PARAM_GLOBAL "^/([^/]*)/?([a-zA-Z])?"
+#define REGEX_PARAM_FILE "^\\s\\s*(.*)"
+#define REGEX_PARAM_MARK "^."
+#define REGEX_GLOBAL_CMD_EXCEPT "[gGvV]"
+
 extern int run_command(ed_state *state);
 
 extern int interpret_addr(ed_state *state);
 
-extern int validate_addr(ed_state *state, int expected_num_addr, bool allow_zero_addr);
+extern int validate_addr(ed_state *state,
+                         int expected_num_addr, bool allow_zero_addr);
 
 #define VALIDATE_ADDR_EXPECT_NO_ADDR()\
 	if (validate_addr(state, 0, false) != 0) {\
@@ -81,7 +92,8 @@ extern int validate_addr(ed_state *state, int expected_num_addr, bool allow_zero
 		return -1;\
 	}
 
-void invalid_marked_addr_iter(ed_state *state, std::list<std::string>::iterator it)
+void invalid_marked_addr_iter(ed_state *state,
+                              std::list<std::string>::iterator it)
 {
 	for (int i = 0; i < 'z'; i++) {
 		if (state->addr_iter_marked[i] == it) {
@@ -106,12 +118,14 @@ void ed_state_init(ed_state *state)
 
 	state->buffer = std::list<std::string>();
 
-	state->addr_offset_current = 0;
+	state->addr_offset_cur = 0;
 	state->addr_offset_begin = 0;
 	state->addr_offset_end = 0;
 	state->addr_offset_max = 0;
 
-	std::fill(std::begin(state->addr_iter_marked), std::end(state->addr_iter_marked), state->buffer.end());
+	std::fill(std::begin(state->addr_iter_marked),
+	          std::end(state->addr_iter_marked),
+	          state->buffer.end());
 
 	state->runs = true;
 
@@ -129,13 +143,15 @@ void ed_state_set_addr_iter(ed_state *state)
 	if (state->addr_offset_begin == 0) {
 		state->addr_iter_begin = state->buffer.begin();
 	} else {
-		state->addr_iter_begin = std::next(state->buffer.begin(), state->addr_offset_begin - 1);
+		state->addr_iter_begin = std::next(state->buffer.begin(),
+		                                   state->addr_offset_begin - 1);
 	}
 
 	if (state->addr_offset_end == 0) {
 		state->addr_iter_end = state->buffer.begin();
 	} else {
-		state->addr_iter_end = std::next(state->buffer.begin(), state->addr_offset_end - 1);
+		state->addr_iter_end = std::next(state->buffer.begin(),
+		                                 state->addr_offset_end - 1);
 	}
 }
 
@@ -235,7 +251,9 @@ int command_edit(ed_state *state)
 
 	state->buffer.clear();
 
-	std::fill(std::begin(state->addr_iter_marked), std::end(state->addr_iter_marked), state->buffer.end());
+	std::fill(std::begin(state->addr_iter_marked),
+	          std::end(state->addr_iter_marked),
+	          state->buffer.end());
 
 	std::ifstream file(state->filename);
 
@@ -251,7 +269,7 @@ int command_edit(ed_state *state)
 		std::cout << nread << std::endl;
 	}
 
-	state->addr_offset_current = state->buffer.size();
+	state->addr_offset_cur = state->buffer.size();
 
 	state->mod_state = UNCHANGED;
 
@@ -261,19 +279,21 @@ int command_edit(ed_state *state)
 int command_print(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_offset_begin = state->addr_offset_current;
-		state->addr_offset_end = state->addr_offset_current;
+		state->addr_offset_begin = state->addr_offset_cur;
+		state->addr_offset_end = state->addr_offset_cur;
 	}
 
 	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
 
 	ed_state_set_addr_iter(state);
 
-	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
+	auto end = std::next(state->addr_iter_end);
+
+	for (auto it = state->addr_iter_begin; it != end; it++) {
 		std::cout << *it << std::endl;
 	}
 
-	state->addr_offset_current = state->addr_offset_end;
+	state->addr_offset_cur = state->addr_offset_end;
 
 	return 0;
 }
@@ -281,8 +301,8 @@ int command_print(ed_state *state)
 int command_number(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_offset_begin = state->addr_offset_current;
-		state->addr_offset_end = state->addr_offset_current;
+		state->addr_offset_begin = state->addr_offset_cur;
+		state->addr_offset_end = state->addr_offset_cur;
 	}
 
 	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
@@ -291,13 +311,15 @@ int command_number(ed_state *state)
 
 	ssize_t line = state->addr_offset_begin;
 
-	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
+	auto end = std::next(state->addr_iter_end);
+
+	for (auto it = state->addr_iter_begin; it != end; it++) {
 		std::cout << line << "\t" << *it << std::endl;
 
 		line++;
 	}
 
-	state->addr_offset_current = state->addr_offset_end;
+	state->addr_offset_cur = state->addr_offset_end;
 
 	return 0;
 }
@@ -305,8 +327,8 @@ int command_number(ed_state *state)
 int command_delete(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_offset_begin = state->addr_offset_current;
-		state->addr_offset_end = state->addr_offset_current;
+		state->addr_offset_begin = state->addr_offset_cur;
+		state->addr_offset_end = state->addr_offset_cur;
 	}
 
 	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
@@ -328,9 +350,10 @@ int command_delete(ed_state *state)
 	}
 
 	if (state->buffer.size() == 0) {
-		state->addr_offset_current = 0;
+		state->addr_offset_cur = 0;
 	} else {
-		state->addr_offset_current = std::distance(state->buffer.begin(), addr_iter_temp) + 1;
+		state->addr_offset_cur = 1 + std::distance(state->buffer.begin(),
+		                                           addr_iter_temp);
 	}
 
 	state->mod_state = CHANGED;
@@ -357,7 +380,9 @@ int command_write(ed_state *state)
 
 	ed_state_set_addr_iter(state);
 
-	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
+	auto end = std::next(state->addr_iter_end);
+
+	for (auto it = state->addr_iter_begin; it != end; it++) {
 		outfile << *it << std::endl;
 	}
 
@@ -382,39 +407,41 @@ int command_prompt(ed_state *state)
 int command_append(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_offset_begin = state->addr_offset_current;
+		state->addr_offset_begin = state->addr_offset_cur;
 	}
 
 	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO();
 
 	ed_state_set_addr_iter(state);
 
-	state->addr_iter_current = state->addr_iter_begin;
+	state->addr_iter_cur = state->addr_iter_begin;
 
 	while (1) {
 		std::string line;
 
 		std::getline(std::cin, line);
 
-		if (line.compare(".") == 0)
-		{
+		if (line.compare(".") == 0) {
 			break;
 		}
 
-		if (state->addr_iter_current == state->addr_iter_begin && state->addr_offset_begin == 0) {
-			state->buffer.insert(state->addr_iter_current, line);
+		if (state->addr_iter_cur == state->addr_iter_begin
+			&&
+			state->addr_offset_begin == 0) {
+			state->buffer.insert(state->addr_iter_cur, line);
 
-			state->addr_iter_current = state->buffer.begin();
+			state->addr_iter_cur = state->buffer.begin();
 		} else {
-			state->buffer.insert(std::next(state->addr_iter_current), line);
+			state->buffer.insert(std::next(state->addr_iter_cur), line);
 
-			state->addr_iter_current = std::next(state->addr_iter_current);
+			state->addr_iter_cur = std::next(state->addr_iter_cur);
 		}
 
 		state->mod_state = CHANGED;
 	}
 
-	state->addr_offset_current = std::distance(state->buffer.begin(), state->addr_iter_current) + 1;
+	state->addr_offset_cur = 1 + std::distance(state->buffer.begin(),
+	                                           state->addr_iter_cur);
 
 	return 0;
 }
@@ -422,15 +449,15 @@ int command_append(ed_state *state)
 int command_insert(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_offset_begin = state->addr_offset_current;
-		state->addr_offset_end = state->addr_offset_current;
+		state->addr_offset_begin = state->addr_offset_cur;
+		state->addr_offset_end = state->addr_offset_cur;
 	}
 
 	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO();
 
 	ed_state_set_addr_iter(state);
 
-	state->addr_iter_current = state->addr_iter_begin;
+	state->addr_iter_cur = state->addr_iter_begin;
 
 	while (1) {
 		std::string line;
@@ -444,13 +471,14 @@ int command_insert(ed_state *state)
 
 		state->buffer.insert(state->addr_iter_begin, line);
 
-		state->addr_iter_current = std::prev(state->addr_iter_begin);
+		state->addr_iter_cur = std::prev(state->addr_iter_begin);
 
 		state->mod_state = CHANGED;
 	}
 
-	if (state->addr_offset_current > 0) {
-		state->addr_offset_current = std::distance(state->buffer.begin(), state->addr_iter_current) + 1;
+	if (state->addr_offset_cur > 0) {
+		state->addr_offset_cur = 1 + std::distance(state->buffer.begin(),
+		                                           state->addr_iter_cur);
 	}
 
 	return 0;
@@ -470,8 +498,8 @@ int command_change(ed_state *state)
 int command_substitute(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_offset_begin = state->addr_offset_current;
-		state->addr_offset_end = state->addr_offset_current;
+		state->addr_offset_begin = state->addr_offset_cur;
+		state->addr_offset_end = state->addr_offset_cur;
 	}
 
 	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
@@ -498,13 +526,15 @@ int command_substitute(ed_state *state)
 
 	std::string rpl = state->params[2];
 
-	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
+	auto end = std::next(state->addr_iter_end);
+
+	for (auto it = state->addr_iter_begin; it != end; it++) {
 		invalid_marked_addr_iter(state, it); // TODO only when a match happend
 
 		*it = std::regex_replace(*it, regex_search_pattern, rpl);
 	}
 
-	state->addr_offset_current = state->addr_offset_end;
+	state->addr_offset_cur = state->addr_offset_end;
 
 	state->mod_state = CHANGED;
 
@@ -533,10 +563,10 @@ int command_global(ed_state *state)
 
 	state->cmd = global_command.at(0);
 
-	std::regex except_commands("[gGvV]");
 	std::smatch except_match;
 
-	if (std::regex_search(global_command, except_match, except_commands)) {
+	if (std::regex_search(global_command, except_match,
+		                  std::regex(REGEX_GLOBAL_CMD_EXCEPT))) {
 		state->error = "Cannot nest global commands";
 		return -1;
 	}
@@ -570,7 +600,8 @@ int command_global(ed_state *state)
 
 	for (auto it = marked_lines.begin(); it != marked_lines.end(); it++) {
 		state->has_cmd_addr = false;
-		state->addr_offset_current = std::distance(state->buffer.begin(), *it) + 1;
+		state->addr_offset_cur = 1 + std::distance(state->buffer.begin(),
+		                                           *it);
 
 		if (run_command(state) != 0) {
 			return -1;
@@ -596,7 +627,7 @@ int command_line_number(ed_state *state)
 int command_mark(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_offset_begin = state->addr_offset_current;
+		state->addr_offset_begin = state->addr_offset_cur;
 	}
 
 	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_NON_ZERO();
@@ -623,8 +654,8 @@ int command_mark(ed_state *state)
 int command_list(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_offset_begin = state->addr_offset_current;
-		state->addr_offset_end = state->addr_offset_current;
+		state->addr_offset_begin = state->addr_offset_cur;
+		state->addr_offset_end = state->addr_offset_cur;
 	}
 
 	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
@@ -642,7 +673,9 @@ int command_list(ed_state *state)
 	}
 	#endif
 
-	for (auto it = state->addr_iter_begin; it != std::next(state->addr_iter_end); it++) {
+	auto end = std::next(state->addr_iter_end);
+
+	for (auto it = state->addr_iter_begin; it != end; it++) {
 		for (unsigned char ch : *it) {
 			if (printed >= cols) {
 				printed = 0;
@@ -665,7 +698,8 @@ int command_list(ed_state *state)
 
 						++printed;
 					} else {
-						std::cout << "\\" << std::setfill('0') << std::setw(3) << std::oct << (int)ch;
+						std::cout << "\\" << std::setfill('0')
+						          << std::setw(3) << std::oct << (int)ch;
 
 						printed += 4;
 					}
@@ -678,7 +712,7 @@ int command_list(ed_state *state)
 		printed = 0;
 	}
 
-	state->addr_offset_current = state->addr_offset_end;
+	state->addr_offset_cur = state->addr_offset_end;
 
 	return 0;
 }
@@ -686,8 +720,8 @@ int command_list(ed_state *state)
 int command_move(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_offset_begin = state->addr_offset_current;
-		state->addr_offset_end = state->addr_offset_current;
+		state->addr_offset_begin = state->addr_offset_cur;
+		state->addr_offset_end = state->addr_offset_cur;
 	}
 
 	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
@@ -702,8 +736,8 @@ int command_move(ed_state *state)
 	}
 
 	if (!move_state.has_cmd_addr) {
-		move_state.addr_offset_begin = move_state.addr_offset_current;
-		move_state.addr_offset_end = move_state.addr_offset_current;
+		move_state.addr_offset_begin = move_state.addr_offset_cur;
+		move_state.addr_offset_end = move_state.addr_offset_cur;
 	}
 
 	if (validate_addr(&move_state, 1, true) != 0) {
@@ -719,7 +753,8 @@ int command_move(ed_state *state)
 		return -1;
 	}
 
-	auto addr_dst_iter = std::next(state->buffer.begin(), move_state.addr_offset_end);
+	auto addr_dst_iter = std::next(state->buffer.begin(),
+	                               move_state.addr_offset_end);
 
 	state->buffer.splice(addr_dst_iter,
 						 state->buffer,
@@ -728,7 +763,8 @@ int command_move(ed_state *state)
 
 	state->mod_state = CHANGED;
 
-	ssize_t moved_lines = 1 + move_state.addr_offset_end - move_state.addr_offset_begin;
+	ssize_t moved_lines = 1 + move_state.addr_offset_end
+	                      - move_state.addr_offset_begin;
 
 	ssize_t move_offset = move_state.addr_offset_end;
 
@@ -736,7 +772,7 @@ int command_move(ed_state *state)
 		--move_offset;
 	}
 
-	state->addr_offset_current = move_offset + moved_lines;
+	state->addr_offset_cur = move_offset + moved_lines;
 
 	return 0;
 }
@@ -744,8 +780,8 @@ int command_move(ed_state *state)
 int command_copy(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_offset_begin = state->addr_offset_current;
-		state->addr_offset_end = state->addr_offset_current;
+		state->addr_offset_begin = state->addr_offset_cur;
+		state->addr_offset_end = state->addr_offset_cur;
 	}
 
 	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
@@ -760,8 +796,8 @@ int command_copy(ed_state *state)
 	}
 
 	if (!copy_state.has_cmd_addr) {
-		copy_state.addr_offset_begin = copy_state.addr_offset_current;
-		copy_state.addr_offset_end = copy_state.addr_offset_current;
+		copy_state.addr_offset_begin = copy_state.addr_offset_cur;
+		copy_state.addr_offset_end = copy_state.addr_offset_cur;
 	}
 
 	if (validate_addr(&copy_state, 1, true) != 0) {
@@ -777,13 +813,16 @@ int command_copy(ed_state *state)
 		return -1;
 	}
 
-	auto addr_dst_iter = std::next(state->buffer.begin(), copy_state.addr_offset_end);
+	auto addr_dst_iter = std::next(state->buffer.begin(),
+	                               copy_state.addr_offset_end);
 
-	state->buffer.insert(addr_dst_iter, state->addr_iter_begin, std::next(state->addr_iter_end));
+	state->buffer.insert(addr_dst_iter, state->addr_iter_begin,
+	                     std::next(state->addr_iter_end));
 
 	state->mod_state = CHANGED;
 
-	ssize_t copied_lines = 1 + copy_state.addr_offset_end - copy_state.addr_offset_begin;
+	ssize_t copied_lines = 1 + copy_state.addr_offset_end
+	                       - copy_state.addr_offset_begin;
 
 	ssize_t copy_offset = copy_state.addr_offset_end;
 
@@ -791,7 +830,7 @@ int command_copy(ed_state *state)
 		--copy_offset;
 	}
 
-	state->addr_offset_current = copy_offset + copied_lines;
+	state->addr_offset_cur = copy_offset + copied_lines;
 
 	return 0;
 }
@@ -799,8 +838,8 @@ int command_copy(ed_state *state)
 int command_join(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
-		state->addr_offset_begin = state->addr_offset_current;
-		state->addr_offset_end = state->addr_offset_current + 1;
+		state->addr_offset_begin = state->addr_offset_cur;
+		state->addr_offset_end = state->addr_offset_cur + 1;
 	}
 
 	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
@@ -822,7 +861,7 @@ int command_join(ed_state *state)
 
 	state->mod_state = CHANGED;
 
-	state->addr_offset_current = state->addr_offset_begin;
+	state->addr_offset_cur = state->addr_offset_begin;
 
 	return 0;
 }
@@ -905,20 +944,20 @@ void print_usage()
 	std::cerr << "JD297 " << TARGET << " source code <https://github.com/jd297/ed>" << std::endl;
 }
 
-#define INTERPRET_ADDR_PART_OK(offset) (offset) >= 0
-#define INTERPRET_ADDR_PART_ERROR -1
-#define INTERPRET_ADDR_PART_NO_MATCH -2
+#define ADDR_PART_OK(offset) (offset) >= 0
+#define ADDR_PART_ERROR -1
+#define ADDR_PART_NO_MATCH -2
 
 ssize_t interpret_addr_part(ed_state *state)
 {
-	ssize_t addr_offset = state->addr_offset_current;
+	ssize_t addr_offset = state->addr_offset_cur;
 
-	std::regex r_pattern("^([\\s]+|[+-]([0-9]+)*|[0-9]+|[$]|[.]|[?]|[/]|'.?)");
 	std::smatch r_match;
 
-	bool first_run;
+	bool first_run = true;
 
-	for(first_run = true; std::regex_search(state->input, r_match, r_pattern); first_run = false) {
+	for(; std::regex_search(state->input, r_match,
+	                        std::regex(REGEX_ADDR_PART)); first_run = false) {
 		state->has_cmd_addr = true;
 
 		std::string match = r_match.str();
@@ -929,7 +968,7 @@ ssize_t interpret_addr_part(ed_state *state)
 			if (!first_run) {
 				state->error = "Invalid address";
 
-				return INTERPRET_ADDR_PART_ERROR;
+				return ADDR_PART_ERROR;
 			}
 
 			addr_offset = state->addr_offset_max;
@@ -938,14 +977,14 @@ ssize_t interpret_addr_part(ed_state *state)
 			if (!first_run) {
 				state->error = "Invalid address";
 
-				return INTERPRET_ADDR_PART_ERROR;
+				return ADDR_PART_ERROR;
 			}
 		}
 		else if (match.at(0) == '\'') {
 			if (match.length() == 1) {
 				state->error = "Invalid mark character";
 
-				return INTERPRET_ADDR_PART_ERROR;
+				return ADDR_PART_ERROR;
 			}
 
 			int x = (int)match.at(1);
@@ -953,7 +992,7 @@ ssize_t interpret_addr_part(ed_state *state)
 			if (islower(x) == 0) {
 				state->error = "Invalid mark character";
 
-				return INTERPRET_ADDR_PART_ERROR;
+				return ADDR_PART_ERROR;
 			}
 
 			auto marked_iter = state->addr_iter_marked[x - 'a'];
@@ -961,10 +1000,11 @@ ssize_t interpret_addr_part(ed_state *state)
 			if (marked_iter == state->buffer.end()) {
 				state->error = "Invalid address";
 
-				return INTERPRET_ADDR_PART_ERROR;
+				return ADDR_PART_ERROR;
 			}
 
-			addr_offset = std::distance(state->buffer.begin(), marked_iter) + 1;
+			addr_offset = 1 + std::distance(state->buffer.begin(),
+			                                marked_iter);
 		}
 		else if (match.compare("/") == 0 || match.compare("?") == 0) {
 			size_t i = 0;
@@ -999,7 +1039,7 @@ ssize_t interpret_addr_part(ed_state *state)
 			if (re.length() == 0) {
 				state->error = "No previous pattern";
 
-				return INTERPRET_ADDR_PART_ERROR;
+				return ADDR_PART_ERROR;
 			}
 
 			std::regex re_pattern(re);
@@ -1007,8 +1047,8 @@ ssize_t interpret_addr_part(ed_state *state)
 
 			std::list<std::string>::iterator it;
 
-			if (match.at(0) == '/') it = std::next(state->addr_iter_current);
-			else it = std::prev(state->addr_iter_current); // == '?'
+			if (match.at(0) == '/') it = std::next(state->addr_iter_cur);
+			else it = std::prev(state->addr_iter_cur); // == '?'
 
 			auto end = it;
 
@@ -1021,7 +1061,7 @@ ssize_t interpret_addr_part(ed_state *state)
 				}
 
 				if (std::regex_search(*it, re_match, re_pattern)) {
-					addr_offset = std::distance(state->buffer.begin(), it) + 1;
+					addr_offset = 1 + std::distance(state->buffer.begin(), it);
 
 					break;
 				}
@@ -1033,7 +1073,7 @@ ssize_t interpret_addr_part(ed_state *state)
 			if (it == end) {
 				state->error = "No match";
 
-				return INTERPRET_ADDR_PART_ERROR;
+				return ADDR_PART_ERROR;
 			}
 		}
 		else if (std::all_of(match.begin(), match.end(), ::isdigit)) {
@@ -1066,13 +1106,13 @@ ssize_t interpret_addr_part(ed_state *state)
 	}
 
 	if (first_run && r_match.length() == 0) {
-		return INTERPRET_ADDR_PART_NO_MATCH;
+		return ADDR_PART_NO_MATCH;
 	}
 
 	if (addr_offset > state->addr_offset_max || addr_offset < 0) {
 		state->error = "Invalid address";
 
-		return INTERPRET_ADDR_PART_ERROR;
+		return ADDR_PART_ERROR;
 	}
 
 	return addr_offset;
@@ -1085,12 +1125,12 @@ typedef enum {
 
 AddrSeperatorResult interpret_addr_seperator(ed_state *state)
 {
-	std::regex pattern("^([,]|[;])");
 	std::smatch match;
 
 	AddrSeperatorResult seperator = NONE;
 
-	if (std::regex_search(state->input, match, pattern)) {
+	if (std::regex_search(state->input, match,
+	                      std::regex(REGEX_ADDR_SEPERATOR))) {
 		if (match.str().compare(",") == 0) {
 			seperator = COMMA;
 		} else if (match.str().compare(";") == 0) {
@@ -1108,23 +1148,25 @@ int interpret_addr(ed_state *state)
 {
 	AddrSeperatorResult seperator;
 
-	state->addr_offset_max = std::distance(state->buffer.begin(), state->buffer.end());
+	state->addr_offset_max = std::distance(state->buffer.begin(),
+	                                       state->buffer.end());
 
 	state->num_addr = 0;
 
-	ssize_t addr_offset_save = INTERPRET_ADDR_PART_ERROR;
+	ssize_t addr_offset_save = ADDR_PART_ERROR;
 
 	do {
 		ssize_t addr_offset = interpret_addr_part(state);
 
-		if (addr_offset == INTERPRET_ADDR_PART_ERROR) {
+		if (addr_offset == ADDR_PART_ERROR) {
 			return -1;
 		}
 
-		if (INTERPRET_ADDR_PART_OK(addr_offset)) {
+		if (ADDR_PART_OK(addr_offset)) {
 			if (state->num_addr == 1 || state->num_addr == 0) {
 				state->num_addr++;
-				state->addr_offset_begin = state->addr_offset_end = addr_offset;
+				state->addr_offset_begin = addr_offset;
+				state->addr_offset_end = addr_offset;
 			} else if (state->num_addr == 2) {
 				state->num_addr++;
 				state->addr_offset_end = addr_offset;
@@ -1132,21 +1174,21 @@ int interpret_addr(ed_state *state)
 				state->addr_offset_begin = state->addr_offset_end;
 				state->addr_offset_end = addr_offset;
 			}
-		} else if (state->num_addr > 0 && addr_offset_save != INTERPRET_ADDR_PART_ERROR) {
+		} else if (state->num_addr > 0 && addr_offset_save != ADDR_PART_ERROR) {
 			state->num_addr = 2;
 
 			state->addr_offset_begin = addr_offset_save;
 		}
 
-		addr_offset_save = INTERPRET_ADDR_PART_ERROR;
+		addr_offset_save = ADDR_PART_ERROR;
 
 		seperator = interpret_addr_seperator(state);
 
 		if (state->num_addr == 0) {
 			switch (seperator) {
 				case NONE: {
-					state->addr_offset_begin = state->addr_offset_current;
-					state->addr_offset_end = state->addr_offset_current;
+					state->addr_offset_begin = state->addr_offset_cur;
+					state->addr_offset_end = state->addr_offset_cur;
 				} break;
 				case COMMA: {
 					state->addr_offset_begin = 1;
@@ -1155,7 +1197,7 @@ int interpret_addr(ed_state *state)
 					state->num_addr = 2;
 				} break;
 				case SEMICOLON: {
-					state->addr_offset_begin = state->addr_offset_current;
+					state->addr_offset_begin = state->addr_offset_cur;
 					state->addr_offset_end = state->addr_offset_max;
 
 					state->num_addr = 2;
@@ -1171,7 +1213,7 @@ int interpret_addr(ed_state *state)
 					}
 				} break;
 				case SEMICOLON: {
-					state->addr_offset_current = state->addr_offset_begin;
+					state->addr_offset_cur = state->addr_offset_begin;
 					addr_offset_save = state->addr_offset_end;
 
 					if (state->num_addr < 2) {
@@ -1201,7 +1243,8 @@ int validate_addr(ed_state *state, int expected_num_addr, bool allow_zero_addr)
 		state->addr_offset_begin = state->addr_offset_end;
 	}
 
-	if (expected_num_addr > 0 && allow_zero_addr == false && (state->addr_offset_begin == 0 || state->addr_offset_end == 0)) {
+	if (expected_num_addr > 0 && allow_zero_addr == false
+		&& (state->addr_offset_begin == 0 || state->addr_offset_end == 0)) {
 		state->error = "Invalid address";
 		return -1;
 	}
@@ -1232,7 +1275,7 @@ int interpret_cmd(ed_state *state)
 
 	std::smatch cmd_match;
 
-	if (!std::regex_search(state->input, cmd_match, std::regex("^\\s*([acdEefGghHijklmnpPQqrstuVvw=!]|$)"))) {
+	if (!std::regex_search(state->input, cmd_match, std::regex(REGEX_CMD))) {
 		state->error = "Unknown command";
 		return -1;
 	} else if (cmd_match[1].str().length() == 0) {
@@ -1245,20 +1288,24 @@ int interpret_cmd(ed_state *state)
 
 	switch (state->cmd) {
 		case 'e': case 'E': case 'f': {
-			std::regex_search(state->input, state->params, std::regex("^\\s\\s*(.*)"));
+			std::regex_search(state->input, state->params,
+			                  std::regex(REGEX_PARAM_FILE));
 		} break;
 		case 'g': case 'G': case 'v': case 'V': {
-			std::regex_search(state->input, state->params, std::regex("^/([^/]*)/?([a-zA-Z])?"));
+			std::regex_search(state->input, state->params,
+			                  std::regex(REGEX_PARAM_GLOBAL));
 		} break;
 		case 's': {
-			std::regex_search(state->input, state->params, std::regex("^/([^/]*)/([^/]*)/?"));
+			std::regex_search(state->input, state->params,
+			                  std::regex(REGEX_PARAM_SUBSTITUTE));
 		} break;
 		case 'k': {
-			std::regex_search(state->input, state->params, std::regex("^."));
+			std::regex_search(state->input, state->params,
+			                  std::regex(REGEX_PARAM_MARK));
 		} break;
 		case 'm': case 't': {
-			std::regex_search(state->input, state->params, 
-			std::regex("^([\\s]+|[+-]([0-9]+)*|[0-9]+|[$]|[.]|[?]|[/]|'.?|[,;])*"));
+			std::regex_search(state->input, state->params,
+			                  std::regex(REGEX_ADDR));
 		} break;
 		default: break;
 	}
@@ -1379,7 +1426,7 @@ int main(int argc, char **argv)
 			continue;
 		}
 
-		state.has_cmd_addr = false; // fallback is addr_offset_current
+		state.has_cmd_addr = false; // fallback is addr_offset_cur
 
 		if (run_command(&state) != 0) {
 			ed_error(&state);
