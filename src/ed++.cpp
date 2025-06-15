@@ -423,6 +423,7 @@ int command_insert(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
 		state->addr_offset_begin = state->addr_offset_current;
+		state->addr_offset_end = state->addr_offset_current;
 	}
 
 	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO();
@@ -448,7 +449,9 @@ int command_insert(ed_state *state)
 		state->mod_state = CHANGED;
 	}
 
-	state->addr_offset_current = std::distance(state->buffer.begin(), state->addr_iter_current) + 1;
+	if (state->addr_offset_current > 0) {
+		state->addr_offset_current = std::distance(state->buffer.begin(), state->addr_iter_current) + 1;
+	}
 
 	return 0;
 }
