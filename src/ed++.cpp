@@ -456,6 +456,17 @@ int command_insert(ed_state *state)
 	return 0;
 }
 
+int command_change(ed_state *state)
+{
+	if (command_delete(state) != 0) {
+		return -1;
+	}
+
+	state->has_cmd_addr = false;
+
+	return command_insert(state);
+}
+
 int command_substitute(ed_state *state)
 {
 	if (!state->has_cmd_addr) {
@@ -828,7 +839,7 @@ int run_command(ed_state *state)
 	switch (state->cmd) {
 		case 'a': return command_append(state);
 
-		// TODO case 'c': return command_change(state);
+		case 'c': return command_change(state);
 
 		case 'd': return command_delete(state);
 
