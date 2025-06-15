@@ -1,7 +1,7 @@
 .POSIX:
 
 CC            = c++
-CFLAGS        = -std=c++17 -Wall -Wextra -Wpedantic -g -DTARGET=\"$(TARGET)\"
+CFLAGS        = -std=c++17 -Wall -Wextra -Wpedantic -g
 LDFLAGS       = 
 
 TARGET        = ed++

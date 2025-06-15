@@ -936,12 +936,10 @@ int run_command(ed_state *state)
 	}
 }
 
-void print_usage()
+void print_usage(char **argv)
 {
-	std::cerr << "Usage: " << TARGET << " [-p string] [-s] [file]" << std::endl;
-	std::cerr << TARGET << " — edit text" << std::endl;
-	std::cerr << std::endl;
-	std::cerr << "JD297 " << TARGET << " source code <https://github.com/jd297/ed>" << std::endl;
+	std::cerr << "Usage: " << argv[0] << " [-p string] [-s] [file]"
+	          << std::endl;
 }
 
 #define ADDR_PART_OK(offset) (offset) >= 0
@@ -1365,7 +1363,7 @@ int main(int argc, char **argv)
 				state.script = 1;
 				break;
 			default:
-				print_usage();
+				print_usage(argv);
 				exit(EXIT_FAILURE);
 		}
 	}
