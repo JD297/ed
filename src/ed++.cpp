@@ -72,23 +72,23 @@ extern int interpret_addr(ed_state *state);
 extern int validate_addr(ed_state *state,
                          int expected_num_addr, bool allow_zero_addr);
 
-#define VALIDATE_ADDR_EXPECT_NO_ADDR()\
-	if (validate_addr(state, 0, false) != 0) {\
+#define VALIDATE_ADDR_EXPECT_NO_ADDR(state)\
+	if (validate_addr((state), 0, false) != 0) {\
 		return -1;\
 	}
 
-#define VALIDATE_ADDR_EXPECT_MULTI_ADDR()\
-	if (validate_addr(state, 2, false) != 0) {\
+#define VALIDATE_ADDR_EXPECT_MULTI_ADDR(state)\
+	if (validate_addr((state), 2, false) != 0) {\
 		return -1;\
 	}
 
-#define VALIDATE_ADDR_EXPECT_SINGLE_ADDR_NON_ZERO()\
-	if (validate_addr(state, 1, false) != 0) {\
+#define VALIDATE_ADDR_EXPECT_SINGLE_ADDR_NON_ZERO(state)\
+	if (validate_addr((state), 1, false) != 0) {\
 		return -1;\
 	}
 
-#define VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO()\
-	if (validate_addr(state, 1, true) != 0) {\
+#define VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO(state)\
+	if (validate_addr((state), 1, true) != 0) {\
 		return -1;\
 	}
 
@@ -164,7 +164,7 @@ void ed_print_error(ed_state *state)
 
 int command_help(ed_state *state)
 {
-	VALIDATE_ADDR_EXPECT_NO_ADDR();
+	VALIDATE_ADDR_EXPECT_NO_ADDR(state);
 
 	ed_print_error(state);
 
@@ -182,7 +182,7 @@ void ed_error(ed_state *state)
 
 int command_help_mode(ed_state *state)
 {
-	VALIDATE_ADDR_EXPECT_NO_ADDR();
+	VALIDATE_ADDR_EXPECT_NO_ADDR(state);
 
 	if ((state->error_print = !state->error_print)) {
 		return command_help(state);
@@ -193,7 +193,7 @@ int command_help_mode(ed_state *state)
 
 int command_quit(ed_state *state)
 {
-	VALIDATE_ADDR_EXPECT_NO_ADDR();
+	VALIDATE_ADDR_EXPECT_NO_ADDR(state);
 
 	if (state->mod_state == CHANGED) {
 		state->mod_state = CHANGED_AND_WARNED;
@@ -210,7 +210,7 @@ int command_quit(ed_state *state)
 
 int command_file(ed_state *state)
 {
-	VALIDATE_ADDR_EXPECT_NO_ADDR();
+	VALIDATE_ADDR_EXPECT_NO_ADDR(state);
 
 	if (state->params.size() > 1) {
 		state->filename = state->params[1];
@@ -229,7 +229,7 @@ int command_file(ed_state *state)
 
 int command_edit(ed_state *state)
 {
-	VALIDATE_ADDR_EXPECT_NO_ADDR();
+	VALIDATE_ADDR_EXPECT_NO_ADDR(state);
 
 	if (state->mod_state == CHANGED) {
 		state->mod_state = CHANGED_AND_WARNED;
@@ -283,7 +283,7 @@ int command_print(ed_state *state)
 		state->addr_offset_end = state->addr_offset_cur;
 	}
 
-	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR(state);
 
 	ed_state_set_addr_iter(state);
 
@@ -305,7 +305,7 @@ int command_number(ed_state *state)
 		state->addr_offset_end = state->addr_offset_cur;
 	}
 
-	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR(state);
 
 	ed_state_set_addr_iter(state);
 
@@ -331,7 +331,7 @@ int command_delete(ed_state *state)
 		state->addr_offset_end = state->addr_offset_cur;
 	}
 
-	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR(state);
 
 	ed_state_set_addr_iter(state);
 
@@ -376,7 +376,7 @@ int command_write(ed_state *state)
 		state->addr_offset_end = state->addr_offset_max;
 	}
 
-	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR(state);
 
 	ed_state_set_addr_iter(state);
 
@@ -397,7 +397,7 @@ int command_write(ed_state *state)
 
 int command_prompt(ed_state *state)
 {
-	VALIDATE_ADDR_EXPECT_NO_ADDR();
+	VALIDATE_ADDR_EXPECT_NO_ADDR(state);
 
 	state->prompt_print = !state->prompt_print;
 
@@ -410,7 +410,7 @@ int command_append(ed_state *state)
 		state->addr_offset_begin = state->addr_offset_cur;
 	}
 
-	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO();
+	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO(state);
 
 	ed_state_set_addr_iter(state);
 
@@ -453,7 +453,7 @@ int command_insert(ed_state *state)
 		state->addr_offset_end = state->addr_offset_cur;
 	}
 
-	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO();
+	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO(state);
 
 	ed_state_set_addr_iter(state);
 
@@ -502,7 +502,7 @@ int command_substitute(ed_state *state)
 		state->addr_offset_end = state->addr_offset_cur;
 	}
 
-	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR(state);
 
 	ed_state_set_addr_iter(state);
 
@@ -548,7 +548,7 @@ int command_global(ed_state *state)
 		state->addr_offset_end = state->addr_offset_max;
 	}
 
-	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR(state);
 
 	ed_state_set_addr_iter(state);
 
@@ -617,7 +617,7 @@ int command_line_number(ed_state *state)
 		state->addr_offset_end = state->addr_offset_max;
 	}
 
-	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO();
+	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO(state);
 
 	std::cout << state->addr_offset_end << std::endl;
 
@@ -630,7 +630,7 @@ int command_mark(ed_state *state)
 		state->addr_offset_begin = state->addr_offset_cur;
 	}
 
-	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_NON_ZERO();
+	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_NON_ZERO(state);
 
 	ed_state_set_addr_iter(state);
 
@@ -658,7 +658,7 @@ int command_list(ed_state *state)
 		state->addr_offset_end = state->addr_offset_cur;
 	}
 
-	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR(state);
 
 	ed_state_set_addr_iter(state);
 
@@ -724,7 +724,7 @@ int command_move(ed_state *state)
 		state->addr_offset_end = state->addr_offset_cur;
 	}
 
-	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR(state);
 
 	ed_state_set_addr_iter(state);
 
@@ -740,9 +740,7 @@ int command_move(ed_state *state)
 		move_state.addr_offset_end = move_state.addr_offset_cur;
 	}
 
-	if (validate_addr(&move_state, 1, true) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO(&move_state);
 
 	if (
 		move_state.addr_offset_end >= state->addr_offset_begin
@@ -784,7 +782,7 @@ int command_copy(ed_state *state)
 		state->addr_offset_end = state->addr_offset_cur;
 	}
 
-	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR(state);
 
 	ed_state_set_addr_iter(state);
 
@@ -800,9 +798,7 @@ int command_copy(ed_state *state)
 		copy_state.addr_offset_end = copy_state.addr_offset_cur;
 	}
 
-	if (validate_addr(&copy_state, 1, true) != 0) {
-		return -1;
-	}
+	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_ZERO(&copy_state);
 
 	if (
 		copy_state.addr_offset_end >= state->addr_offset_begin
@@ -842,7 +838,7 @@ int command_join(ed_state *state)
 		state->addr_offset_end = state->addr_offset_cur + 1;
 	}
 
-	VALIDATE_ADDR_EXPECT_MULTI_ADDR();
+	VALIDATE_ADDR_EXPECT_MULTI_ADDR(state);
 
 	ed_state_set_addr_iter(state);
 
@@ -868,7 +864,7 @@ int command_join(ed_state *state)
 
 int command_null(ed_state *state)
 {
-	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_NON_ZERO();
+	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_NON_ZERO(state);
 
 	return command_print(state);
 }
