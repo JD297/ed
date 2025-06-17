@@ -1,6 +1,8 @@
+#include <err.h>
 #include <iostream>
 #include <fstream>
 #include <string>
+#include <string.h>
 #include <list>
 #include <regex>
 #include <algorithm>
@@ -8,6 +10,7 @@
 #include <unistd.h>
 #include <iomanip>
 #include <sys/ioctl.h>
+#include <sys/wait.h>
 
 typedef enum {
 	UNCHANGED,
@@ -53,6 +56,8 @@ typedef struct ed_state {
 	int num_addr;
 
 	std::string last_re;
+
+	std::string last_sh;
 } ed_state;
 
 #define REGEX_ADDR "^([\\s]+|[+-]([0-9]+)*|[0-9]+|[$]|[.]|[?]|[/]|'.?|[,;])*"
@@ -61,6 +66,7 @@ typedef struct ed_state {
 #define REGEX_CMD "^\\s*([acdEefGghHijklmnpPQqrstuVvw=!]|$)"
 #define REGEX_PARAM_SUBSTITUTE "^/([^/]*)/([^/]*)/?"
 #define REGEX_PARAM_GLOBAL "^/([^/]*)/?([a-zA-Z])?"
+#define REGEX_PARAM_ALL "^.*"
 #define REGEX_PARAM_FILE "^\\s\\s*(.*)"
 #define REGEX_PARAM_MARK "^."
 #define REGEX_GLOBAL_CMD_EXCEPT "[gGvV]"
@@ -136,6 +142,7 @@ void ed_state_init(ed_state *state)
 	state->num_addr = 0;
 
 	state->last_re = "";
+	state->last_sh = "";
 }
 
 void ed_state_set_addr_iter(ed_state *state)
@@ -862,6 +869,80 @@ int command_join(ed_state *state)
 	return 0;
 }
 
+int command_shell_escape(ed_state *state)
+{
+	bool print_sh = false;
+
+	std::string sh = state->params.str();
+
+	if (sh.length() > 0 && sh.at(0) == '!') {
+		if (state->last_sh.length() < 1) {
+			state->error = "No previous command";
+			return -1;
+		}
+
+		sh = sh.replace(0, 1, state->last_sh);
+
+		print_sh = true;
+	}
+
+	std::string tmp_sh;
+
+    bool last_backslash = false;
+
+	for (char c : sh) {
+		if (c == '%' && !last_backslash) {
+			if (state->filename.length() == 0) {
+				state->error = "No current filename";
+				return -1;
+			}
+
+			tmp_sh += state->filename;
+		} else {
+			tmp_sh += c;
+		}
+
+		last_backslash = (c == '\\');
+	}
+
+	if (tmp_sh.compare(sh) != 0) {
+		sh = tmp_sh;
+
+		print_sh = true;
+	}
+
+	if (print_sh) {
+		std::cout << sh << std::endl;
+	}
+
+	state->last_sh = sh;
+
+	pid_t pid;
+
+	if ((pid = fork()) == -1) {
+		state->error = strerror(errno);
+		return -1;
+	}
+
+	if (pid == 0) {
+		const char *argv[] = { "sh", "-c", "--", sh.c_str(), NULL };
+
+		if (execvp("sh", (char * const*)argv) == -1) {
+			err(EXIT_FAILURE, "%s", sh.c_str());
+		}
+
+		exit(EXIT_SUCCESS);
+	}
+
+	wait(NULL);
+
+	if (!state->script) {
+		std::cout << "!" << std::endl;
+	}
+
+	return 0;
+}
+
 int command_null(ed_state *state)
 {
 	VALIDATE_ADDR_EXPECT_SINGLE_ADDR_NON_ZERO(state);
@@ -924,7 +1005,7 @@ int run_command(ed_state *state)
 
 		case '=': return command_line_number(state);
 
-		// TODO case '!': return command_shell_escape(state);
+		case '!': return command_shell_escape(state);
 
 		case '\0': return command_null(state);
 
@@ -1300,6 +1381,10 @@ int interpret_cmd(ed_state *state)
 		case 'm': case 't': {
 			std::regex_search(state->input, state->params,
 			                  std::regex(REGEX_ADDR));
+		} break;
+		case '!': {
+			std::regex_search(state->input, state->params,
+			                  std::regex(REGEX_PARAM_ALL));
 		} break;
 		default: break;
 	}
